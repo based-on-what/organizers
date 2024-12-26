@@ -16,7 +16,6 @@ A collection of Python scripts for organizing and managing files based on their 
   - [comanga.py](#comangapy)
   - [doc2docx.py](#doc2docxpy)
 - [Contribution](#contribution)
-- [License](#license)
 - [Credits](#credits)
 
 ## General Information
@@ -112,9 +111,6 @@ Contributions are welcome! To contribute:
 4. Submit a pull request
 
 Please report any issues in the Issues section.
-
-## License
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Credits
 - @based-on-what - Main developer
