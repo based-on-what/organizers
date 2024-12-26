@@ -56,7 +56,7 @@ def contar_paginas_archivo(ruta_archivo):
         return contar_paginas_epub(ruta_archivo)
     elif extension == '.mobi':
         return contar_paginas_mobi(ruta_archivo)
-    elif extension in ['.docx', '.doc']:
+    elif extension in ['.docx']:
         return contar_paginas_word(ruta_archivo)
     else:
         raise Exception(f"Formato de archivo no soportado: {extension}")
