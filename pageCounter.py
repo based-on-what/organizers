@@ -4,10 +4,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from ebooklib import epub
 from rarfile import RarFile
 from pdfminer.high_level import extract_text
-from PIL import Image
-import io
+from PyPDF2 import PdfReader
+from docx import Document
 
-class DirectoryInfo:
+class FileInfo:
     def __init__(self, name, total_pages, png_count, jpg_count):
         self.name = name
         self.total_pages = total_pages
@@ -15,98 +15,114 @@ class DirectoryInfo:
         self.jpg_count = jpg_count
 
     def __str__(self):
-        return f"{self.name}: {self.total_pages}"
+        return (f"{self.name}: {self.total_pages} páginas, PNGs: {self.png_count}, "
+                f"JPGs: {self.jpg_count}")
 
 def contar_archivos_imagenes(directory):
-    png_count = 0
-    jpg_count = 0
-    for file in os.listdir(directory):
-        if file.endswith('.png'):
-            try:
-                img = Image.open(os.path.join(directory, file))
-                img.close()
-                png_count += 1
-            except:
-                pass
-        elif file.endswith('.jpg') or file.endswith('.jpeg'):
-            try:
-                img = Image.open(os.path.join(directory, file))
-                img.close()
-                jpg_count += 1
-            except:
-                pass
+    """Cuenta la cantidad de imágenes PNG y JPG en un directorio."""
+    png_count = sum(1 for f in os.listdir(directory) if f.lower().endswith('.png'))
+    jpg_count = sum(1 for f in os.listdir(directory) if f.lower().endswith(('.jpg', '.jpeg')))
     return png_count, jpg_count
 
-def contar_paginas_cbz_cbr(cbz_cbr_file):
+def contar_paginas_cbz_cbr(file_path):
+    """Cuenta las páginas en archivos CBZ y CBR."""
     try:
-        page_count = 0
-        if cbz_cbr_file.endswith('.cbz'):
-            with zipfile.ZipFile(cbz_cbr_file, 'r') as archive:
-                page_count = len([f for f in archive.namelist() if any(f.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp'))])
-        elif cbz_cbr_file.endswith('.cbr'):
-            with RarFile(cbz_cbr_file, 'r') as archive:
-                page_count = len([f for f in archive.namelist() if any(f.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp'))])
-        return page_count
+        if file_path.lower().endswith('.cbz'):
+            with zipfile.ZipFile(file_path, 'r') as archive:
+                return len([f for f in archive.namelist() if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))])
+        elif file_path.lower().endswith('.cbr'):
+            with RarFile(file_path, 'r') as archive:
+                return len([f for f in archive.namelist() if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))])
     except Exception:
-        return 0
+        pass
+    return 0
 
-def contar_paginas_epub(epub_file):
+def contar_paginas_epub(file_path):
+    """Cuenta las páginas en archivos EPUB basándose en el número de elementos HTML."""
     try:
-        book = epub.read_epub(epub_file)
+        book = epub.read_epub(file_path)
         return len([item for item in book.get_items() if isinstance(item, epub.EpubHtml)])
     except Exception:
-        return 0
+        pass
+    return 0
 
-def contar_paginas_pdf(pdf_file):
+def contar_paginas_pdf(file_path):
+    """Cuenta las páginas en archivos PDF utilizando PyPDF2."""
     try:
-        return len(list(extract_text(pdf_file).splitlines()))
+        with open(file_path, 'rb') as f:
+            reader = PdfReader(f)
+            return len(reader.pages)
     except Exception:
-        return 0
+        pass
+    return 0
 
-def contar_paginas_subdirectorios(main_directory):
-    subdirectories = [d for d in os.listdir(main_directory) if os.path.isdir(os.path.join(main_directory, d))]
-    directory_info = {}
+def contar_paginas_docx(file_path):
+    """Cuenta las páginas en archivos DOCX utilizando una estrategia específica."""
+    try:
+        document = Document(file_path)
+        page_count = 0
+        for para in document.paragraphs:
+            if para.text == 'Microsoft Word 2010 - Level 2':
+                page_count += 1
+        return page_count
+    except Exception:
+        pass
+    return 0
 
-    with ThreadPoolExecutor() as executor:
-        futures = [executor.submit(process_subdirectory, os.path.join(main_directory, subdirectory)) for subdirectory in subdirectories]
+def contar_paginas_archivo(file_path):
+    """Cuenta la cantidad de páginas en un archivo de texto compatible."""
+    try:
+        print(f"Contando páginas del archivo {os.path.basename(file_path)}...")
+        if file_path.endswith('.txt'):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                return len(lines) // 30  # Asumimos 30 líneas por página como aproximación
+        elif file_path.endswith('.pdf'):
+            return contar_paginas_pdf(file_path)
+        elif file_path.endswith('.docx'):
+            return contar_paginas_docx(file_path)
+        elif file_path.endswith('.epub'):
+            return contar_paginas_epub(file_path)
+        elif file_path.lower().endswith(('.cbz', '.cbr')):
+            return contar_paginas_cbz_cbr(file_path)
+    except Exception:
+        pass
+    return 0
+
+def analizar_directorio(directory):
+    """Analiza cada archivo en un directorio y sus subdirectorios, generando información detallada."""
+    results = []
+
+    with ThreadPoolExecutor(max_workers=min(32, os.cpu_count() + 4)) as executor:
+        futures = {}
+
+        for root, _, files in os.walk(directory):
+            for file in files:
+                file_path = os.path.join(root, file)
+                futures[executor.submit(contar_paginas_archivo, file_path)] = file_path
+
         for future in as_completed(futures):
-            subdirectory, info = future.result()
-            directory_info[subdirectory] = info
+            file_path = futures[future]
+            try:
+                total_pages = future.result()
+                png_count, jpg_count = contar_archivos_imagenes(os.path.dirname(file_path))
+                results.append(FileInfo(os.path.basename(file_path), total_pages, png_count, jpg_count))
+            except Exception as e:
+                print(f"Error procesando {file_path}: {e}")
 
-    sorted_dirs = sorted(directory_info.items(), key=lambda x: x[1].total_pages, reverse=True)
-    for subdirectory, info in sorted_dirs:
-        print(info)
-
-    with open("diccionario_paginas.txt", "w", encoding="utf-8") as txt_file:
-        for subdirectory, info in sorted_dirs:
-            txt_file.write(str(info) + "\n")
-
-def process_subdirectory(subdirectory_path):
-    files = os.listdir(subdirectory_path)
-    total_page_count = 0
-    png_count, jpg_count = contar_archivos_imagenes(subdirectory_path)
-
-    with ThreadPoolExecutor() as executor:
-        futures = []
-        for file in files:
-            file_path = os.path.join(subdirectory_path, file)
-            if file.endswith('.cbz'):
-                futures.append(executor.submit(contar_paginas_cbz_cbr, file_path))
-            elif file.endswith('.cbr'):
-                futures.append(executor.submit(contar_paginas_cbz_cbr, file_path))
-            elif file.endswith('.epub'):
-                futures.append(executor.submit(contar_paginas_epub, file_path))
-            elif file.endswith('.pdf'):
-                futures.append(executor.submit(contar_paginas_pdf, file_path))
-
-        for future in as_completed(futures):
-            total_page_count += future.result()
-
-    return os.path.basename(subdirectory_path), DirectoryInfo(os.path.basename(subdirectory_path), total_page_count, png_count, jpg_count)
+    return results
 
 def main():
+    """Punto de entrada principal del script."""
     script_directory = os.path.dirname(os.path.abspath(__file__))
-    contar_paginas_subdirectorios(script_directory)
+    results = analizar_directorio(script_directory)
+
+    for info in results:
+        print(info)
+
+    with open("resultados_directorio.txt", "w", encoding="utf-8") as f:
+        for info in results:
+            f.write(str(info) + "\n")
 
 if __name__ == "__main__":
     main()
