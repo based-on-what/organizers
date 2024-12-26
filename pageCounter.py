@@ -1,128 +1,140 @@
 import os
-import zipfile
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from ebooklib import epub
-from rarfile import RarFile
-from pdfminer.high_level import extract_text
 from PyPDF2 import PdfReader
+import ebooklib
+from ebooklib import epub
+from mobi import Mobi
 from docx import Document
 
-class FileInfo:
-    def __init__(self, name, total_pages, png_count, jpg_count):
-        self.name = name
-        self.total_pages = total_pages
-        self.png_count = png_count
-        self.jpg_count = jpg_count
-
-    def __str__(self):
-        return (f"{self.name}: {self.total_pages} páginas, PNGs: {self.png_count}, "
-                f"JPGs: {self.jpg_count}")
-
-def contar_archivos_imagenes(directory):
-    """Cuenta la cantidad de imágenes PNG y JPG en un directorio."""
-    png_count = sum(1 for f in os.listdir(directory) if f.lower().endswith('.png'))
-    jpg_count = sum(1 for f in os.listdir(directory) if f.lower().endswith(('.jpg', '.jpeg')))
-    return png_count, jpg_count
-
-def contar_paginas_cbz_cbr(file_path):
-    """Cuenta las páginas en archivos CBZ y CBR."""
+def contar_paginas_epub(ruta_archivo):
+    """
+    Cuenta las páginas aproximadas de un archivo EPUB
+    """
     try:
-        if file_path.lower().endswith('.cbz'):
-            with zipfile.ZipFile(file_path, 'r') as archive:
-                return len([f for f in archive.namelist() if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))])
-        elif file_path.lower().endswith('.cbr'):
-            with RarFile(file_path, 'r') as archive:
-                return len([f for f in archive.namelist() if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))])
-    except Exception:
-        pass
-    return 0
+        book = epub.read_epub(ruta_archivo)
+        # Contamos los documentos HTML como páginas
+        paginas = len(list(book.get_items_of_type(ebooklib.ITEM_DOCUMENT)))
+        return paginas
+    except Exception as e:
+        raise Exception(f"Error al procesar EPUB: {str(e)}")
 
-def contar_paginas_epub(file_path):
-    """Cuenta las páginas en archivos EPUB basándose en el número de elementos HTML."""
+def contar_paginas_mobi(ruta_archivo):
+    """
+    Cuenta las páginas aproximadas de un archivo MOBI
+    """
     try:
-        book = epub.read_epub(file_path)
-        return len([item for item in book.get_items() if isinstance(item, epub.EpubHtml)])
-    except Exception:
-        pass
-    return 0
+        book = Mobi(ruta_archivo)
+        book.parse()
+        # Estimamos páginas basándonos en el número de caracteres (aprox. 2000 por página)
+        caracteres_por_pagina = 2000
+        paginas = max(1, len(book.get_book_content()) // caracteres_por_pagina)
+        return paginas
+    except Exception as e:
+        raise Exception(f"Error al procesar MOBI: {str(e)}")
 
-def contar_paginas_pdf(file_path):
-    """Cuenta las páginas en archivos PDF utilizando PyPDF2."""
+def contar_paginas_word(ruta_archivo):
+    """
+    Cuenta las páginas de un archivo DOC/DOCX usando los saltos de página
+    """
     try:
-        with open(file_path, 'rb') as f:
-            reader = PdfReader(f)
-            return len(reader.pages)
-    except Exception:
-        pass
-    return 0
+        doc = Document(ruta_archivo)
+        # Contar los saltos de página y añadir 1 para la primera página
+        paginas = sum(p.runs[-1].element.xpath("./w:br[@w:type='page']") for p in doc.paragraphs if p.runs) + 1
+        return paginas
+    except Exception as e:
+        raise Exception(f"Error al procesar archivo Word: {str(e)}")
 
-def contar_paginas_docx(file_path):
-    """Cuenta las páginas en archivos DOCX utilizando una estrategia específica."""
-    try:
-        document = Document(file_path)
-        page_count = 0
-        for para in document.paragraphs:
-            if para.text == 'Microsoft Word 2010 - Level 2':
-                page_count += 1
-        return page_count
-    except Exception:
-        pass
-    return 0
+def contar_paginas_archivo(ruta_archivo):
+    """
+    Cuenta las páginas de un archivo según su extensión
+    """
+    extension = os.path.splitext(ruta_archivo)[1].lower()
+    
+    if extension == '.pdf':
+        reader = PdfReader(ruta_archivo, strict=False)
+        return len(reader.pages)
+    elif extension == '.epub':
+        return contar_paginas_epub(ruta_archivo)
+    elif extension == '.mobi':
+        return contar_paginas_mobi(ruta_archivo)
+    elif extension in ['.docx', '.doc']:
+        return contar_paginas_word(ruta_archivo)
+    else:
+        raise Exception(f"Formato de archivo no soportado: {extension}")
 
-def contar_paginas_archivo(file_path):
-    """Cuenta la cantidad de páginas en un archivo de texto compatible."""
-    try:
-        print(f"Contando páginas del archivo {os.path.basename(file_path)}...")
-        if file_path.endswith('.txt'):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-                return len(lines) // 30  # Asumimos 30 líneas por página como aproximación
-        elif file_path.endswith('.pdf'):
-            return contar_paginas_pdf(file_path)
-        elif file_path.endswith('.docx'):
-            return contar_paginas_docx(file_path)
-        elif file_path.endswith('.epub'):
-            return contar_paginas_epub(file_path)
-        elif file_path.lower().endswith(('.cbz', '.cbr')):
-            return contar_paginas_cbz_cbr(file_path)
-    except Exception:
-        pass
-    return 0
+def contar_paginas_archivos(directorio):
+    """
+    Cuenta las páginas de los archivos PDF, EPUB, MOBI y DOC/DOCX en el directorio especificado.
+    """
+    archivos_paginas = []
+    archivos_error = []
 
-def analizar_directorio(directory):
-    """Analiza cada archivo en un directorio y sus subdirectorios, generando información detallada."""
-    results = []
+    # Listar todos los archivos con extensiones soportadas
+    extensiones = ('.pdf', '.epub', '.mobi', '.doc', '.docx')
+    archivos = [archivo for archivo in os.listdir(directorio) 
+                if archivo.lower().endswith(extensiones)]
+    total_archivos = len(archivos)
+    
+    print(f"\nIniciando procesamiento de {total_archivos} archivos...\n")
 
-    with ThreadPoolExecutor(max_workers=min(32, os.cpu_count() + 4)) as executor:
-        futures = {}
+    for indice, archivo in enumerate(archivos, 1):
+        print(f"Procesando archivo {indice}/{total_archivos}: {archivo}...", end=" ")
+        ruta_archivo = os.path.join(directorio, archivo)
+        try:
+            # Verificar si el archivo está vacío
+            if os.path.getsize(ruta_archivo) == 0:
+                print("ERROR: Archivo vacío")
+                archivos_error.append((archivo, "Archivo vacío"))
+                continue
 
-        for root, _, files in os.walk(directory):
-            for file in files:
-                file_path = os.path.join(root, file)
-                futures[executor.submit(contar_paginas_archivo, file_path)] = file_path
+            # Contar páginas según el tipo de archivo
+            num_paginas = contar_paginas_archivo(ruta_archivo)
+            archivos_paginas.append((archivo, num_paginas))
+            print(f"COMPLETADO ({num_paginas} páginas)")
 
-        for future in as_completed(futures):
-            file_path = futures[future]
-            try:
-                total_pages = future.result()
-                png_count, jpg_count = contar_archivos_imagenes(os.path.dirname(file_path))
-                results.append(FileInfo(os.path.basename(file_path), total_pages, png_count, jpg_count))
-            except Exception as e:
-                print(f"Error procesando {file_path}: {e}")
+        except Exception as e:
+            print(f"ERROR: {str(e)}")
+            archivos_error.append((archivo, str(e)))
 
-    return results
+    print("\nProcesamiento de archivos completado!")
 
-def main():
-    """Punto de entrada principal del script."""
-    script_directory = os.path.dirname(os.path.abspath(__file__))
-    results = analizar_directorio(script_directory)
+    # Imprimir resumen de errores
+    if archivos_error:
+        print("\nResumen de archivos con errores:")
+        for archivo, error in archivos_error:
+            print(f"Error en {archivo}:")
+            print(f"  - Tipo de error: {error}")
+            print(f"  - Ruta completa: {os.path.join(directorio, archivo)}")
+            print()
 
-    for info in results:
-        print(info)
+    return archivos_paginas
 
-    with open("resultados_directorio.txt", "w", encoding="utf-8") as f:
-        for info in results:
-            f.write(str(info) + "\n")
+def ordenar_y_guardar(archivos_paginas, archivo_salida):
+    """
+    Ordena los archivos por número de páginas, imprime el resultado y lo guarda en un archivo.
+    """
+    # Ordenar los archivos por número de páginas
+    archivos_ordenados = sorted(archivos_paginas, key=lambda x: x[1])
+
+    # Mostrar en consola
+    print("Archivos ordenados por número de páginas:")
+    for nombre, paginas in archivos_ordenados:
+        print(f"{nombre}: {paginas} páginas")
+
+    # Guardar en el archivo de salida usando UTF-8
+    with open(archivo_salida, 'w', encoding='utf-8') as f:
+        f.write("Archivos ordenados por número de páginas:\n")
+        for nombre, paginas in archivos_ordenados:
+            f.write(f"{nombre}: {paginas} páginas\n")
 
 if __name__ == "__main__":
-    main()
+    # Directorio actual
+    directorio_actual = os.getcwd()
+
+    # Contar páginas de los archivos
+    archivos_paginas = contar_paginas_archivos(directorio_actual)
+
+    # Ordenar y guardar el resultado
+    archivo_salida = "resultado.txt"
+    ordenar_y_guardar(archivos_paginas, archivo_salida)
+
+    print(f"\nEl resultado se ha guardado en el archivo '{archivo_salida}'.")
