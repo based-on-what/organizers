@@ -1,140 +1,169 @@
 import os
+from pathlib import Path
 from PyPDF2 import PdfReader
 import ebooklib
 from ebooklib import epub
 from mobi import Mobi
 from docx import Document
 
-def contar_paginas_epub(ruta_archivo):
+def count_epub_pages(file_path):
     """
-    Cuenta las páginas aproximadas de un archivo EPUB
+    Counts approximate pages in an EPUB file
     """
     try:
-        book = epub.read_epub(ruta_archivo)
-        # Contamos los documentos HTML como páginas
-        paginas = len(list(book.get_items_of_type(ebooklib.ITEM_DOCUMENT)))
-        return paginas
+        book = epub.read_epub(file_path)
+        # Count HTML documents as pages
+        pages = len(list(book.get_items_of_type(ebooklib.ITEM_DOCUMENT)))
+        return pages
     except Exception as e:
-        raise Exception(f"Error al procesar EPUB: {str(e)}")
+        raise Exception(f"Error processing EPUB: {str(e)}")
 
-def contar_paginas_mobi(ruta_archivo):
+def count_mobi_pages(file_path):
     """
-    Cuenta las páginas aproximadas de un archivo MOBI
+    Counts approximate pages in a MOBI file
     """
     try:
-        book = Mobi(ruta_archivo)
+        book = Mobi(file_path)
         book.parse()
-        # Estimamos páginas basándonos en el número de caracteres (aprox. 2000 por página)
-        caracteres_por_pagina = 2000
-        paginas = max(1, len(book.get_book_content()) // caracteres_por_pagina)
-        return paginas
+        # Estimate pages based on character count (approx. 2000 per page)
+        chars_per_page = 2000
+        content_length = len(book.get_book_content())
+        pages = max(1, content_length // chars_per_page)
+        return pages
     except Exception as e:
-        raise Exception(f"Error al procesar MOBI: {str(e)}")
+        raise Exception(f"Error processing MOBI: {str(e)}")
 
-def contar_paginas_word(ruta_archivo):
+def count_word_pages(file_path):
     """
-    Cuenta las páginas de un archivo DOC/DOCX usando los saltos de página
+    Counts pages in a DOC/DOCX file using page breaks
     """
     try:
-        doc = Document(ruta_archivo)
-        # Contar los saltos de página y añadir 1 para la primera página
-        paginas = sum(p.runs[-1].element.xpath("./w:br[@w:type='page']") for p in doc.paragraphs if p.runs) + 1
-        return paginas
+        doc = Document(file_path)
+        # Count page breaks and add 1 for the first page
+        page_breaks = 0
+        for paragraph in doc.paragraphs:
+            if paragraph.runs:
+                page_breaks += len(paragraph.runs[-1].element.xpath("./w:br[@w:type='page']"))
+        return page_breaks + 1
     except Exception as e:
-        raise Exception(f"Error al procesar archivo Word: {str(e)}")
+        raise Exception(f"Error processing Word file: {str(e)}")
 
-def contar_paginas_archivo(ruta_archivo):
+def count_file_pages(file_path):
     """
-    Cuenta las páginas de un archivo según su extensión
+    Counts pages in a file based on its extension
     """
-    extension = os.path.splitext(ruta_archivo)[1].lower()
+    file_path = Path(file_path)
+    extension = file_path.suffix.lower()
     
     if extension == '.pdf':
-        reader = PdfReader(ruta_archivo, strict=False)
+        reader = PdfReader(file_path, strict=False)
         return len(reader.pages)
     elif extension == '.epub':
-        return contar_paginas_epub(ruta_archivo)
+        return count_epub_pages(file_path)
     elif extension == '.mobi':
-        return contar_paginas_mobi(ruta_archivo)
-    elif extension in ['.docx']:
-        return contar_paginas_word(ruta_archivo)
+        return count_mobi_pages(file_path)
+    elif extension == '.docx':
+        return count_word_pages(file_path)
     else:
-        raise Exception(f"Formato de archivo no soportado: {extension}")
+        raise Exception(f"Unsupported file format: {extension}")
 
-def contar_paginas_archivos(directorio):
+def count_pages_in_directory(directory):
     """
-    Cuenta las páginas de los archivos PDF, EPUB, MOBI y DOC/DOCX en el directorio especificado.
+    Counts pages in PDF, EPUB, MOBI, and DOC/DOCX files in the specified directory.
     """
-    archivos_paginas = []
-    archivos_error = []
+    directory = Path(directory)
+    files_with_pages = []
+    error_files = []
 
-    # Listar todos los archivos con extensiones soportadas
-    extensiones = ('.pdf', '.epub', '.mobi', '.doc', '.docx')
-    archivos = [archivo for archivo in os.listdir(directorio) 
-                if archivo.lower().endswith(extensiones)]
-    total_archivos = len(archivos)
+    # List all files with supported extensions
+    supported_extensions = ('.pdf', '.epub', '.mobi', '.doc', '.docx')
+    files = [f for f in directory.iterdir() 
+             if f.is_file() and f.suffix.lower() in supported_extensions]
     
-    print(f"\nIniciando procesamiento de {total_archivos} archivos...\n")
+    total_files = len(files)
+    print(f"\nStarting processing of {total_files} files...\n")
 
-    for indice, archivo in enumerate(archivos, 1):
-        print(f"Procesando archivo {indice}/{total_archivos}: {archivo}...", end=" ")
-        ruta_archivo = os.path.join(directorio, archivo)
+    for index, file_path in enumerate(files, 1):
+        print(f"Processing file {index}/{total_files}: {file_path.name}...", end=" ")
+        
         try:
-            # Verificar si el archivo está vacío
-            if os.path.getsize(ruta_archivo) == 0:
-                print("ERROR: Archivo vacío")
-                archivos_error.append((archivo, "Archivo vacío"))
+            # Check if file is empty
+            if file_path.stat().st_size == 0:
+                print("ERROR: Empty file")
+                error_files.append((file_path.name, "Empty file"))
                 continue
 
-            # Contar páginas según el tipo de archivo
-            num_paginas = contar_paginas_archivo(ruta_archivo)
-            archivos_paginas.append((archivo, num_paginas))
-            print(f"COMPLETADO ({num_paginas} páginas)")
+            # Count pages based on file type
+            page_count = count_file_pages(file_path)
+            files_with_pages.append((file_path.name, page_count))
+            print(f"COMPLETED ({page_count} pages)")
 
         except Exception as e:
             print(f"ERROR: {str(e)}")
-            archivos_error.append((archivo, str(e)))
+            error_files.append((file_path.name, str(e)))
 
-    print("\nProcesamiento de archivos completado!")
+    print("\nFile processing completed!")
 
-    # Imprimir resumen de errores
-    if archivos_error:
-        print("\nResumen de archivos con errores:")
-        for archivo, error in archivos_error:
-            print(f"Error en {archivo}:")
-            print(f"  - Tipo de error: {error}")
-            print(f"  - Ruta completa: {os.path.join(directorio, archivo)}")
+    # Print error summary
+    if error_files:
+        print("\nSummary of files with errors:")
+        for filename, error in error_files:
+            print(f"Error in {filename}:")
+            print(f"  - Error type: {error}")
+            print(f"  - Full path: {directory / filename}")
             print()
 
-    return archivos_paginas
+    return files_with_pages
 
-def ordenar_y_guardar(archivos_paginas, archivo_salida):
+def sort_and_save(files_with_pages, output_file):
     """
-    Ordena los archivos por número de páginas, imprime el resultado y lo guarda en un archivo.
+    Sorts files by page count, prints the result, and saves it to a file.
     """
-    # Ordenar los archivos por número de páginas
-    archivos_ordenados = sorted(archivos_paginas, key=lambda x: x[1])
+    # Sort files by page count
+    sorted_files = sorted(files_with_pages, key=lambda x: x[1])
 
-    # Mostrar en consola
-    print("Archivos ordenados por número de páginas:")
-    for nombre, paginas in archivos_ordenados:
-        print(f"{nombre}: {paginas} páginas")
+    # Display in console
+    print("\nFiles sorted by page count:")
+    total_pages = 0
+    for filename, pages in sorted_files:
+        print(f"{filename}: {pages} pages")
+        total_pages += pages
+    
+    print(f"\nTotal files: {len(sorted_files)}")
+    print(f"Total pages: {total_pages}")
 
-    # Guardar en el archivo de salida usando UTF-8
-    with open(archivo_salida, 'w', encoding='utf-8') as f:
-        f.write("Archivos ordenados por número de páginas:\n")
-        for nombre, paginas in archivos_ordenados:
-            f.write(f"{nombre}: {paginas} páginas\n")
+    # Save to output file using UTF-8
+    output_path = Path(output_file)
+    with output_path.open('w', encoding='utf-8') as f:
+        f.write("Files sorted by page count:\n")
+        f.write("=" * 40 + "\n\n")
+        for filename, pages in sorted_files:
+            f.write(f"{filename}: {pages} pages\n")
+        f.write(f"\nSummary:\n")
+        f.write(f"Total files: {len(sorted_files)}\n")
+        f.write(f"Total pages: {total_pages}\n")
+
+def main():
+    """
+    Main function to execute the page counting process
+    """
+    # Current directory
+    current_directory = Path.cwd()
+    
+    print(f"Scanning directory: {current_directory}")
+
+    # Count pages in files
+    files_with_pages = count_pages_in_directory(current_directory)
+
+    if not files_with_pages:
+        print("No supported files found in the directory.")
+        return
+
+    # Sort and save results
+    output_file = "page_count_results.txt"
+    sort_and_save(files_with_pages, output_file)
+
+    print(f"\nResults have been saved to '{output_file}'.")
 
 if __name__ == "__main__":
-    # Directorio actual
-    directorio_actual = os.getcwd()
-
-    # Contar páginas de los archivos
-    archivos_paginas = contar_paginas_archivos(directorio_actual)
-
-    # Ordenar y guardar el resultado
-    archivo_salida = "resultado.txt"
-    ordenar_y_guardar(archivos_paginas, archivo_salida)
-
-    print(f"\nEl resultado se ha guardado en el archivo '{archivo_salida}'.")
+    main()
