@@ -1,0 +1,24 @@
+# Core dependencies for file processing
+pypdf>=4.0.0          # Modern PDF processing (replaces deprecated PyPDF2)
+python-docx>=1.1.0    # Word document processing
+ebooklib>=0.18        # EPUB file processing
+rarfile>=4.0          # RAR archive processing
+
+# Video processing
+moviepy>=2.0.0        # Video file processing and duration analysis
+
+# Web requests and APIs
+requests>=2.31.0      # HTTP requests for Steam API
+howlongtobeatpy>=1.0.7  # Game completion time data
+
+# Cross-platform compatibility (Windows COM interface alternative)
+# Note: win32com only available on Windows, alternatives needed for cross-platform
+comtypes>=1.2.0; sys_platform == "win32"  # Alternative COM interface for Windows
+
+# Optional: Progress bars and enhanced CLI
+tqdm>=4.66.0          # Progress bars for long operations
+click>=8.1.0          # Enhanced CLI interface (alternative to argparse)
+
+# Development and code quality (optional)
+# black>=23.0.0       # Code formatting
+# pylint>=3.0.0       # Code linting
