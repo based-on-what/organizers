@@ -7,6 +7,7 @@ in subdirectories, providing organized results by series.
 """
 
 import sys
+import logging
 from pathlib import Path
 from typing import Dict
 

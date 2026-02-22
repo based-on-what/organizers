@@ -7,6 +7,7 @@ and modern library support. MOBI support has been removed due to deprecated depe
 """
 
 import sys
+import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 

@@ -15,10 +15,12 @@ A collection of enhanced Python scripts for organizing and managing files based 
   - [seriesLength.py](#serieslengthpy)
   - [comanga.py](#comangapy)
   - [doc2docx.py](#doc2docxpy)
+- [Project Structure](#project-structure)
 - [Configuration](#configuration)
 - [Performance Features](#performance-features)
 - [Troubleshooting](#troubleshooting)
 - [Contribution](#contribution)
+- [License](#license)
 - [Credits](#credits)
 
 ## General Information
@@ -268,6 +270,25 @@ python doc2docx.py
 - **Linux/macOS**: Requires LibreOffice for conversion
 - **Fallback**: Attempts multiple methods automatically
 
+## Project Structure
+
+```text
+organizers/
+├── README.md
+├── shared_utils.py
+├── length.py
+├── seriesLength.py
+├── pageCounter.py
+├── comanga.py
+├── doc2docx.py
+└── steamSorter.py
+```
+
+### Maintenance Notes
+- Logging is explicitly imported in each executable script for reliable module-level logging calls.
+- Runtime constants now use named values where appropriate (for example, minimum video file size in `length.py`).
+- Broad bare `except:` handlers were narrowed to `except Exception:` where silent cleanup is required.
+
 ## Configuration
 
 ### Shared Configuration
@@ -352,6 +373,9 @@ Contributions are welcome! To contribute:
 4. Submit a pull request
 
 Please report any issues in the Issues section.
+
+## License
+No license file is currently included in this repository. Add a `LICENSE` file to define usage and distribution terms.
 
 ## Credits
 - @based-on-what - Main developer

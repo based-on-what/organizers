@@ -7,6 +7,7 @@ and counts pages for organizing collections. Features improved error handling an
 """
 
 import sys
+import logging
 import zipfile
 from pathlib import Path
 from typing import Dict
