@@ -7,6 +7,7 @@ support and improved error handling.
 """
 
 import sys
+import logging
 import platform
 from pathlib import Path
 from typing import List, Optional
@@ -196,7 +197,7 @@ def convert_doc_to_docx(input_folder: Optional[Path] = None) -> None:
         if word_app:
             try:
                 word_app.Quit()
-            except:
+            except Exception:
                 pass
         
         progress.finish()

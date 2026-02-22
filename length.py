@@ -8,6 +8,7 @@ providing detailed logging and robust error handling for corrupted files.
 
 import argparse
 import json
+import logging
 import sys
 import time
 from pathlib import Path
@@ -23,6 +24,9 @@ from shared_utils import (
     setup_logging, format_duration, format_file_size, safe_file_operation,
     find_files_by_extensions, save_results_to_file, ProgressReporter
 )
+
+
+MIN_VIDEO_FILE_SIZE_BYTES = 100 * 1024
 
 
 def get_video_duration(video_path: Path) -> Optional[Tuple[float, int]]:
@@ -43,7 +47,7 @@ def get_video_duration(video_path: Path) -> Optional[Tuple[float, int]]:
         file_size = video_path.stat().st_size
         
         # Skip files smaller than 100KB (likely corrupted or not actual videos)
-        if file_size < 100 * 1024:
+        if file_size < MIN_VIDEO_FILE_SIZE_BYTES:
             logging.warning(f"File too small ({file_size} bytes): {video_path}")
             return None
         
@@ -67,7 +71,7 @@ def get_video_duration(video_path: Path) -> Optional[Tuple[float, int]]:
             if clip is not None:
                 try:
                     clip.close()
-                except:
+                except Exception:
                     pass
             
     except Exception as e:
@@ -203,7 +207,7 @@ def print_summary(results: Dict[str, Dict]) -> None:
     logging.info(f"Average size: {format_file_size(total_size / file_count)}")
 
 
-def main():
+def main() -> None:
     """Main function with command-line argument parsing."""
     parser = argparse.ArgumentParser(
         description="Analyze video file durations in directories"
