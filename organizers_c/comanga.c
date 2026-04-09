@@ -170,8 +170,14 @@ static int count_pages_epub(const char *epub_path)
 static int count_pages_cbr(const char *cbr_path)
 {
     /* Build a command that lists archive contents */
+    char *escaped = escape_windows_arg(cbr_path);
+    if (!escaped) {
+        LOG_W("Memory allocation failed for CBR path: %s", cbr_path);
+        return -1;
+    }
     char cmd[MAX_PATH * 2 + 64];
-    _snprintf(cmd, sizeof(cmd), "unrar.exe l -c- \"%s\"", cbr_path);
+    _snprintf(cmd, sizeof(cmd), "unrar.exe l -c- \"%s\"", escaped);
+    free(escaped);
 
     /* Use _popen to capture output */
     FILE *pipe = _popen(cmd, "r");

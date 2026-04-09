@@ -175,19 +175,14 @@ Open the appropriate **Native Tools Command Prompt for VS 2022** and run from th
 The flag `/D_CRT_SECURE_NO_WARNINGS` suppresses MSVC deprecation warnings about standard C
 functions (`_snprintf`, `fopen`, etc.) — the code is correct, these are cosmetic warnings only.
 
+#### Quick build — paste the whole block into the Developer Console
+
 ```bat
-:: Compile each tool (shared_utils.c is always linked in)
-
 cl /W3 /std:c11 /O2 /D_CRT_SECURE_NO_WARNINGS comanga.c      shared_utils.c /Fe:comanga.exe
-
 cl /W3 /std:c11 /O2 /D_CRT_SECURE_NO_WARNINGS doc2docx.c     shared_utils.c /Fe:doc2docx.exe     ole32.lib oleaut32.lib
-
 cl /W3 /std:c11 /O2 /D_CRT_SECURE_NO_WARNINGS length.c       shared_utils.c /Fe:length.exe        mfplat.lib mfreadwrite.lib mf.lib mfuuid.lib propsys.lib ole32.lib
-
 cl /W3 /std:c11 /O2 /D_CRT_SECURE_NO_WARNINGS pageCounter.c  shared_utils.c /Fe:pageCounter.exe
-
 cl /W3 /std:c11 /O2 /D_CRT_SECURE_NO_WARNINGS seriesLength.c shared_utils.c /Fe:seriesLength.exe  mfplat.lib mfreadwrite.lib mf.lib mfuuid.lib propsys.lib ole32.lib
-
 cl /W3 /std:c11 /O2 /D_CRT_SECURE_NO_WARNINGS steamSorter.c  shared_utils.c /Fe:steamSorter.exe   winhttp.lib
 ```
 

@@ -107,8 +107,14 @@ static int count_pages_epub(const char *epub_path)
 /* ------------------------------------------------------------------ */
 static int count_pages_cbr(const char *cbr_path)
 {
+    char *escaped = escape_posix_arg(cbr_path);
+    if (!escaped) {
+        LOG_W("Memory allocation failed for CBR path: %s", cbr_path);
+        return -1;
+    }
     char cmd[PATH_MAX * 2 + 32];
-    snprintf(cmd, sizeof(cmd), "unrar l -c- \"%s\" 2>/dev/null", cbr_path);
+    snprintf(cmd, sizeof(cmd), "unrar l -c- \"%s\" 2>/dev/null", escaped);
+    free(escaped);
     FILE *pipe = popen(cmd, "r");
     if (!pipe) {
         LOG_W("unrar not found in PATH. CBR page count unavailable: %s", cbr_path);

@@ -221,10 +221,20 @@ static int convert_with_word(IDispatch *pWord,
 static int convert_with_libreoffice(const char *input_path,
                                      const char *output_dir)
 {
+    char *escaped_input = escape_windows_arg(input_path);
+    char *escaped_output = escape_windows_arg(output_dir);
+    if (!escaped_input || !escaped_output) {
+        free(escaped_input);
+        free(escaped_output);
+        LOG_E("Memory allocation failed for paths: %s, %s", input_path, output_dir);
+        return 0;
+    }
     char cmd[MAX_PATH * 3];
     _snprintf(cmd, sizeof(cmd),
               "soffice --headless --convert-to docx --outdir \"%s\" \"%s\"",
-              output_dir, input_path);
+              escaped_output, escaped_input);
+    free(escaped_input);
+    free(escaped_output);
 
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;

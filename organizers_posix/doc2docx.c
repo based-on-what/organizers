@@ -66,11 +66,21 @@ static int convert_with_libreoffice(const char *soffice,
                                      const char *input_path,
                                      const char *output_dir)
 {
+    char *escaped_input = escape_posix_arg(input_path);
+    char *escaped_output = escape_posix_arg(output_dir);
+    if (!escaped_input || !escaped_output) {
+        free(escaped_input);
+        free(escaped_output);
+        LOG_E("Memory allocation failed for paths: %s, %s", input_path, output_dir);
+        return 0;
+    }
     char cmd[PATH_MAX * 3];
     snprintf(cmd, sizeof(cmd),
              "\"%s\" --headless --convert-to docx --outdir \"%s\" \"%s\""
              " >/dev/null 2>&1",
-             soffice, output_dir, input_path);
+             soffice, escaped_output, escaped_input);
+    free(escaped_input);
+    free(escaped_output);
 
     int ret = system(cmd);
     if (ret == 0) {

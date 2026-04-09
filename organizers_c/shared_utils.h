@@ -143,4 +143,6 @@ const char *str_stristr(const char *haystack, const char *needle);
 void utf8_to_wide(const char    *utf8,  wchar_t *wide, int wide_chars);
 void wide_to_utf8(const wchar_t *wide,  char    *utf8, int utf8_bytes);
 
+char *escape_windows_arg(const char *arg);
+
 #endif /* SHARED_UTILS_H */

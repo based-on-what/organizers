@@ -126,4 +126,6 @@ void progress_finish(ProgressReporter *pr);
 int         str_ends_with_ci(const char *str, const char *suffix);
 const char *str_stristr     (const char *haystack, const char *needle);
 
+char *escape_posix_arg(const char *arg);
+
 #endif /* SHARED_UTILS_H */

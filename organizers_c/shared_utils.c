@@ -465,3 +465,18 @@ void progress_finish(ProgressReporter *pr)
     LOG_I("%s completed: %d/%d",
           pr->description, pr->current, pr->total);
 }
+
+char *escape_windows_arg(const char *arg)
+{
+    if (!arg) return NULL;
+    size_t len = strlen(arg);
+    char *buf = malloc(len * 2 + 1);
+    if (!buf) return NULL;
+    char *dst = buf;
+    for (const char *src = arg; *src; src++) {
+        if (*src == '"') *dst++ = '"';
+        *dst++ = *src;
+    }
+    *dst = '\0';
+    return buf;
+}
