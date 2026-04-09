@@ -1,28 +1,42 @@
 /*
- * shared_utils.h
- * Translated from: shared_utils.py
+ * shared_utils.h  (POSIX version)
+ * Portable equivalent of organizers_c/shared_utils.h
  *
- * Purpose: Common utilities used by all organizer tools.
- *   - Timestamped logging (Win32 GetLocalTime)
- *   - File size and duration formatting
- *   - File validation (GetFileAttributesEx / CreateFile)
- *   - Recursive file finder (FindFirstFile / FindNextFile)
- *   - ZIP central-directory reader (for CBZ, EPUB, DOCX internals)
- *   - Result file writer
- *   - Progress reporter
+ * Targets: Linux, macOS (any POSIX-compliant system)
+ * Compiler: gcc / clang  (-std=c11)
  *
- * Compilation (MSVC):  cl /W3 shared_utils.c ...
- * Compilation (MinGW): gcc -std=c11 shared_utils.c ...
+ * Win32 → POSIX substitutions used here:
+ *   GetLocalTime          → time() + localtime()
+ *   FindFirstFile/Next    → opendir() / readdir()   <dirent.h>
+ *   GetFileAttributesExA  → stat()                  <sys/stat.h>
+ *   CreateFile + ReadFile → fopen() + fread()
+ *   MAX_PATH              → PATH_MAX                <limits.h>
+ *   _strdup               → strdup
+ *   _stricmp              → strcasecmp              <strings.h>
+ *   _strnicmp             → strncasecmp
+ *   _snprintf             → snprintf  (standard C99)
+ *   _vsnprintf            → vsnprintf (standard C99)
  */
 
 #ifndef SHARED_UTILS_H
 #define SHARED_UTILS_H
 
-#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>    /* strcasecmp, strncasecmp */
 #include <ctype.h>
+#include <time.h>
+#include <sys/stat.h>
+#include <dirent.h>
+#include <unistd.h>
+#include <limits.h>
+#include <stdarg.h>
+
+/* Use system PATH_MAX, fall back to 4096 */
+#ifndef PATH_MAX
+#  define PATH_MAX 4096
+#endif
 
 /* ------------------------------------------------------------------ */
 /*  Logging                                                             */
@@ -39,7 +53,6 @@ void log_init(int level, const char *log_file_path);
 void log_msg (int level, const char *fmt, ...);
 void log_close(void);
 
-/* Convenience macros */
 #define LOG_D(...)  log_msg(LOG_DEBUG,   __VA_ARGS__)
 #define LOG_I(...)  log_msg(LOG_INFO,    __VA_ARGS__)
 #define LOG_W(...)  log_msg(LOG_WARNING, __VA_ARGS__)
@@ -52,21 +65,14 @@ void format_file_size(char *buf, size_t buf_size, long long size_bytes);
 void format_duration (char *buf, size_t buf_size, double seconds);
 
 /* ------------------------------------------------------------------ */
-/*  File validation (Win32)                                             */
+/*  File validation                                                     */
 /* ------------------------------------------------------------------ */
-/* Returns 1 if path is a file with size >= min_size, 0 otherwise */
 int validate_file_path(const char *path, long long min_size);
-
-/* Returns 1 if file exists, is non-empty, and is readable, 0 otherwise */
 int safe_file_operation(const char *path);
 
 /* ------------------------------------------------------------------ */
 /*  Result writer                                                        */
 /* ------------------------------------------------------------------ */
-/*
- * Writes an array of text lines to output_file, preceded by a
- * title header.  Returns 1 on success, 0 on failure.
- */
 int save_results_to_file(const char **lines, int line_count,
                           const char *output_file, const char *title);
 
@@ -83,11 +89,6 @@ FileList *filelist_create(void);
 void      filelist_add(FileList *list, const char *path);
 void      filelist_free(FileList *list);
 
-/*
- * Recursively enumerate files whose suffix matches one of the
- * supplied extensions (e.g. ".mp4").  Directories named in
- * exclude_dirs are skipped.
- */
 void find_files_by_extensions(
     const char  *directory,
     const char **extensions,   int ext_count,
@@ -97,23 +98,12 @@ void find_files_by_extensions(
 );
 
 /* ------------------------------------------------------------------ */
-/*  ZIP central-directory reader                                        */
-/*  Used by comanga, pageCounter (EPUB = ZIP, DOCX = ZIP).             */
+/*  ZIP central-directory reader (identical to Windows version —       */
+/*  ZIP is a portable binary format)                                   */
 /* ------------------------------------------------------------------ */
-typedef struct {
-    char filename[512];
-} ZipEntry;
+typedef struct { char filename[512]; } ZipEntry;
+typedef struct { ZipEntry *entries; int count; } ZipFileList;
 
-typedef struct {
-    ZipEntry *entries;
-    int       count;
-} ZipFileList;
-
-/*
- * Reads the ZIP central directory and fills *out with all entry
- * filenames.  Returns 1 on success, 0 on failure.
- * Caller must call zipfilelist_free() when done.
- */
 int  zip_list_files(const char *zip_path, ZipFileList *out);
 void zipfilelist_free(ZipFileList *list);
 
@@ -133,14 +123,7 @@ void progress_finish(ProgressReporter *pr);
 /* ------------------------------------------------------------------ */
 /*  String helpers                                                      */
 /* ------------------------------------------------------------------ */
-/* Case-insensitive suffix check */
-int str_ends_with_ci(const char *str, const char *suffix);
-
-/* Case-insensitive search within a string (returns pointer or NULL) */
-const char *str_stristr(const char *haystack, const char *needle);
-
-/* UTF-8 / UTF-16 conversion helpers (wraps MultiByteToWideChar / WideCharToMultiByte) */
-void utf8_to_wide(const char    *utf8,  wchar_t *wide, int wide_chars);
-void wide_to_utf8(const wchar_t *wide,  char    *utf8, int utf8_bytes);
+int         str_ends_with_ci(const char *str, const char *suffix);
+const char *str_stristr     (const char *haystack, const char *needle);
 
 #endif /* SHARED_UTILS_H */

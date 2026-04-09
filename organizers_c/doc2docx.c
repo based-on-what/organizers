@@ -176,11 +176,11 @@ static int convert_with_word(IDispatch *pWord,
 {
     /* Build wide-string paths */
     wchar_t w_input[MAX_PATH], w_output[MAX_PATH];
-    MultiByteToWideChar(CP_ACP, 0, input_path, -1, w_input, MAX_PATH);
+    MultiByteToWideChar(CP_UTF8, 0, input_path, -1, w_input, MAX_PATH);
 
     char out_path[MAX_PATH];
     _snprintf(out_path, sizeof(out_path), "%s\\%s.docx", output_dir, stem);
-    MultiByteToWideChar(CP_ACP, 0, out_path, -1, w_output, MAX_PATH);
+    MultiByteToWideChar(CP_UTF8, 0, out_path, -1, w_output, MAX_PATH);
 
     /* pWord.Documents.Open(input_path) */
     IDispatch *pDocs = get_obj_prop(pWord, L"Documents");
@@ -257,17 +257,20 @@ static int convert_with_libreoffice(const char *input_path,
 static void convert_doc_to_docx(const char *input_folder)
 {
     /* Create output\ subdirectory */
-    char output_dir[MAX_PATH];
+    char output_dir[MAX_PATH * 3];
     _snprintf(output_dir, sizeof(output_dir), "%s\\output", input_folder);
-    CreateDirectoryA(output_dir, NULL); /* OK if already exists */
+    wchar_t wout_dir[MAX_PATH];
+    utf8_to_wide(output_dir, wout_dir, MAX_PATH);
+    CreateDirectoryW(wout_dir, NULL); /* OK if already exists */
     LOG_I("Output directory: %s", output_dir);
 
     /* Enumerate .doc files (non-recursive, matching original script) */
-    char pattern[MAX_PATH];
-    _snprintf(pattern, sizeof(pattern), "%s\\*.doc", input_folder);
+    wchar_t winput[MAX_PATH], wpattern[MAX_PATH];
+    utf8_to_wide(input_folder, winput, MAX_PATH);
+    _snwprintf(wpattern, MAX_PATH, L"%s\\*.doc", winput);
 
-    WIN32_FIND_DATAA ffd;
-    HANDLE hFind = FindFirstFileA(pattern, &ffd);
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(wpattern, &ffd);
 
     /* Collect doc files */
     char doc_paths[1024][MAX_PATH];
@@ -276,21 +279,25 @@ static void convert_doc_to_docx(const char *input_folder)
 
     if (hFind != INVALID_HANDLE_VALUE) {
         do {
+            char fname_u8[MAX_PATH * 3];
+            wide_to_utf8(ffd.cFileName, fname_u8, sizeof(fname_u8));
+
             /* Exclude .docx (Windows glob *.doc also matches *.docx) */
-            if (str_ends_with_ci(ffd.cFileName, ".docx")) continue;
+            if (str_ends_with_ci(fname_u8, ".docx")) continue;
             if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
 
             _snprintf(doc_paths[doc_count], MAX_PATH, "%s\\%s",
-                      input_folder, ffd.cFileName);
+                      input_folder, fname_u8);
 
             /* Compute stem (filename without extension) */
-            strncpy(doc_stems[doc_count], ffd.cFileName, MAX_PATH - 1);
+            strncpy(doc_stems[doc_count], fname_u8, MAX_PATH - 1);
+            doc_stems[doc_count][MAX_PATH - 1] = '\0';
             char *dot = strrchr(doc_stems[doc_count], '.');
             if (dot) *dot = '\0';
 
             doc_count++;
             if (doc_count >= 1024) break;
-        } while (FindNextFileA(hFind, &ffd));
+        } while (FindNextFileW(hFind, &ffd));
         FindClose(hFind);
     }
 
@@ -370,11 +377,15 @@ int main(int argc, char *argv[])
 {
     log_init(LOG_INFO, NULL);
 
-    char folder[MAX_PATH];
+    char folder[MAX_PATH * 3];
     if (argc >= 2) {
-        _snprintf(folder, sizeof(folder), "%s", argv[1]);
+        wchar_t warg[MAX_PATH];
+        MultiByteToWideChar(CP_ACP, 0, argv[1], -1, warg, MAX_PATH);
+        wide_to_utf8(warg, folder, sizeof(folder));
     } else {
-        GetCurrentDirectoryA(MAX_PATH, folder);
+        wchar_t wdir_buf[MAX_PATH];
+        GetCurrentDirectoryW(MAX_PATH, wdir_buf);
+        wide_to_utf8(wdir_buf, folder, sizeof(folder));
     }
 
     LOG_I("doc2docx - DOC to DOCX Converter");

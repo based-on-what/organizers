@@ -42,7 +42,9 @@
 /* ------------------------------------------------------------------ */
 static int count_pdf_pages(const char *path)
 {
-    HANDLE hFile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ,
+    wchar_t wpath[MAX_PATH];
+    utf8_to_wide(path, wpath, MAX_PATH);
+    HANDLE hFile = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ,
                                NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         LOG_E("Cannot open PDF: %s", path);
@@ -136,7 +138,9 @@ static int count_epub_pages(const char *path)
 static int count_docx_pages(const char *path)
 {
     /* Open the DOCX (which is a ZIP) */
-    HANDLE hFile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ,
+    wchar_t wpath[MAX_PATH];
+    utf8_to_wide(path, wpath, MAX_PATH);
+    HANDLE hFile = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ,
                                NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         LOG_E("Cannot open DOCX: %s", path);
@@ -320,11 +324,12 @@ static void process_file(const char *path, const char *name)
 
 static void scan_directory(const char *dir)
 {
-    char pattern[MAX_PATH];
-    _snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+    wchar_t wdir[MAX_PATH], wpattern[MAX_PATH];
+    utf8_to_wide(dir, wdir, MAX_PATH);
+    _snwprintf(wpattern, MAX_PATH, L"%s\\*", wdir);
 
-    WIN32_FIND_DATAA ffd;
-    HANDLE hFind = FindFirstFileA(pattern, &ffd);
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(wpattern, &ffd);
     if (hFind == INVALID_HANDLE_VALUE) {
         LOG_E("Cannot open directory: %s", dir);
         return;
@@ -334,11 +339,13 @@ static void scan_directory(const char *dir)
     int total = 0;
     do {
         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-        if (str_ends_with_ci(ffd.cFileName, ".pdf")  ||
-            str_ends_with_ci(ffd.cFileName, ".epub") ||
-            str_ends_with_ci(ffd.cFileName, ".docx"))
+        char fn[MAX_PATH * 3];
+        wide_to_utf8(ffd.cFileName, fn, sizeof(fn));
+        if (str_ends_with_ci(fn, ".pdf")  ||
+            str_ends_with_ci(fn, ".epub") ||
+            str_ends_with_ci(fn, ".docx"))
             total++;
-    } while (FindNextFileA(hFind, &ffd));
+    } while (FindNextFileW(hFind, &ffd));
     FindClose(hFind);
 
     if (total == 0) {
@@ -350,21 +357,23 @@ static void scan_directory(const char *dir)
     ProgressReporter pr;
     progress_init(&pr, total, "Processing files");
 
-    hFind = FindFirstFileA(pattern, &ffd);
+    hFind = FindFirstFileW(wpattern, &ffd);
     if (hFind == INVALID_HANDLE_VALUE) return;
 
     do {
         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-        if (!(str_ends_with_ci(ffd.cFileName, ".pdf")  ||
-              str_ends_with_ci(ffd.cFileName, ".epub") ||
-              str_ends_with_ci(ffd.cFileName, ".docx")))
+        char fname_u8[MAX_PATH * 3];
+        wide_to_utf8(ffd.cFileName, fname_u8, sizeof(fname_u8));
+        if (!(str_ends_with_ci(fname_u8, ".pdf")  ||
+              str_ends_with_ci(fname_u8, ".epub") ||
+              str_ends_with_ci(fname_u8, ".docx")))
             continue;
 
-        char full_path[MAX_PATH];
-        _snprintf(full_path, sizeof(full_path), "%s\\%s", dir, ffd.cFileName);
-        process_file(full_path, ffd.cFileName);
+        char full_path[MAX_PATH * 3];
+        _snprintf(full_path, sizeof(full_path), "%s\\%s", dir, fname_u8);
+        process_file(full_path, fname_u8);
         progress_update(&pr, 1);
-    } while (FindNextFileA(hFind, &ffd));
+    } while (FindNextFileW(hFind, &ffd));
 
     FindClose(hFind);
     progress_finish(&pr);
@@ -430,11 +439,16 @@ int main(int argc, char *argv[])
 {
     log_init(LOG_INFO, NULL);
 
-    char dir[MAX_PATH];
-    if (argc >= 2)
-        _snprintf(dir, sizeof(dir), "%s", argv[1]);
-    else
-        GetCurrentDirectoryA(MAX_PATH, dir);
+    char dir[MAX_PATH * 3];
+    if (argc >= 2) {
+        wchar_t warg[MAX_PATH];
+        MultiByteToWideChar(CP_ACP, 0, argv[1], -1, warg, MAX_PATH);
+        wide_to_utf8(warg, dir, sizeof(dir));
+    } else {
+        wchar_t wdir_buf[MAX_PATH];
+        GetCurrentDirectoryW(MAX_PATH, wdir_buf);
+        wide_to_utf8(wdir_buf, dir, sizeof(dir));
+    }
 
     LOG_I("Scanning directory: %s", dir);
 

@@ -54,7 +54,7 @@ static const char *EXCLUDED_DIRS[] = {
 static double get_video_duration_mf(const char *path)
 {
     wchar_t wpath[MAX_PATH];
-    MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, MAX_PATH);
+    MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, MAX_PATH);
 
     IMFSourceReader *pReader = NULL;
     HRESULT hr = MFCreateSourceReaderFromURL(wpath, NULL, &pReader);
@@ -184,17 +184,24 @@ int main(int argc, char *argv[])
 {
     log_init(LOG_INFO, NULL);
 
-    char base_dir[MAX_PATH];
-    if (argc >= 2)
-        _snprintf(base_dir, sizeof(base_dir), "%s", argv[1]);
-    else
-        GetCurrentDirectoryA(MAX_PATH, base_dir);
+    char base_dir[MAX_PATH * 3];
+    if (argc >= 2) {
+        wchar_t warg[MAX_PATH];
+        MultiByteToWideChar(CP_ACP, 0, argv[1], -1, warg, MAX_PATH);
+        wide_to_utf8(warg, base_dir, sizeof(base_dir));
+    } else {
+        wchar_t wdir_buf[MAX_PATH];
+        GetCurrentDirectoryW(MAX_PATH, wdir_buf);
+        wide_to_utf8(wdir_buf, base_dir, sizeof(base_dir));
+    }
 
     LOG_I("TV Series Duration Analyzer");
     LOG_I("Base directory: %s", base_dir);
 
     /* Validate */
-    DWORD attrs = GetFileAttributesA(base_dir);
+    wchar_t wbase[MAX_PATH];
+    utf8_to_wide(base_dir, wbase, MAX_PATH);
+    DWORD attrs = GetFileAttributesW(wbase);
     if (attrs == INVALID_FILE_ATTRIBUTES ||
         !(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
         LOG_E("Directory does not exist: %s", base_dir);
@@ -210,11 +217,11 @@ int main(int argc, char *argv[])
     }
 
     /* Enumerate immediate subdirectories as series */
-    char pattern[MAX_PATH];
-    _snprintf(pattern, sizeof(pattern), "%s\\*", base_dir);
+    wchar_t wpattern[MAX_PATH];
+    _snwprintf(wpattern, MAX_PATH, L"%s\\*", wbase);
 
-    WIN32_FIND_DATAA ffd;
-    HANDLE hFind = FindFirstFileA(pattern, &ffd);
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(wpattern, &ffd);
     if (hFind == INVALID_HANDLE_VALUE) {
         LOG_E("Cannot enumerate: %s", base_dir);
         MFShutdown();
@@ -224,26 +231,29 @@ int main(int argc, char *argv[])
     LOG_I("Processing video files in series directories...");
 
     do {
-        if (strcmp(ffd.cFileName, ".") == 0 ||
-            strcmp(ffd.cFileName, "..") == 0)
+        if (wcscmp(ffd.cFileName, L".") == 0 ||
+            wcscmp(ffd.cFileName, L"..") == 0)
             continue;
         if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
             continue;
 
+        char fname_u8[MAX_PATH * 3];
+        wide_to_utf8(ffd.cFileName, fname_u8, sizeof(fname_u8));
+
         /* Skip excluded directories */
         int excluded = 0;
         for (int i = 0; i < EXCLUDED_DIR_COUNT; i++)
-            if (_stricmp(ffd.cFileName, EXCLUDED_DIRS[i]) == 0) {
+            if (_stricmp(fname_u8, EXCLUDED_DIRS[i]) == 0) {
                 excluded = 1; break;
             }
         if (excluded) continue;
 
-        char series_path[MAX_PATH];
+        char series_path[MAX_PATH * 3];
         _snprintf(series_path, sizeof(series_path), "%s\\%s",
-                  base_dir, ffd.cFileName);
-        process_series(series_path, ffd.cFileName);
+                  base_dir, fname_u8);
+        process_series(series_path, fname_u8);
 
-    } while (FindNextFileA(hFind, &ffd));
+    } while (FindNextFileW(hFind, &ffd));
     FindClose(hFind);
 
     MFShutdown();

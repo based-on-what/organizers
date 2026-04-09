@@ -91,8 +91,10 @@ static double get_video_duration_mf(const wchar_t *wpath)
 
 static long long get_file_size(const char *path)
 {
+    wchar_t wpath[MAX_PATH];
+    utf8_to_wide(path, wpath, MAX_PATH);
     WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &fad))
+    if (!GetFileAttributesExW(wpath, GetFileExInfoStandard, &fad))
         return -1;
     LARGE_INTEGER sz;
     sz.HighPart = (LONG)fad.nFileSizeHigh;
@@ -113,9 +115,9 @@ static void process_video(const char *path)
         return;
     }
 
-    /* Convert path to wide string for MF */
+    /* Convert UTF-8 path to wide string for MF */
     wchar_t wpath[MAX_PATH];
-    MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, MAX_PATH);
+    MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, MAX_PATH);
 
     double duration = get_video_duration_mf(wpath);
     if (duration <= 0.0) {
@@ -281,8 +283,12 @@ int main(int argc, char *argv[])
     log_init(LOG_INFO, "video_analyzer.log");
 
     /* Defaults */
-    char base_dir[MAX_PATH];
-    GetCurrentDirectoryA(MAX_PATH, base_dir);
+    char base_dir[MAX_PATH * 3];
+    {
+        wchar_t wdir_buf[MAX_PATH];
+        GetCurrentDirectoryW(MAX_PATH, wdir_buf);
+        wide_to_utf8(wdir_buf, base_dir, sizeof(base_dir));
+    }
     char output_file[MAX_PATH] = "video_duration_analysis.txt";
 
     const char **video_exts   = DEFAULT_VIDEO_EXTS;
@@ -293,7 +299,9 @@ int main(int argc, char *argv[])
     /* Parse arguments (minimal) */
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] != '-') {
-            _snprintf(base_dir, sizeof(base_dir), "%s", argv[i]);
+            wchar_t warg[MAX_PATH];
+            MultiByteToWideChar(CP_ACP, 0, argv[i], -1, warg, MAX_PATH);
+            wide_to_utf8(warg, base_dir, sizeof(base_dir));
         } else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
             _snprintf(output_file, sizeof(output_file), "%s", argv[++i]);
         } else if (strcmp(argv[i], "-h") == 0 ||
@@ -304,7 +312,9 @@ int main(int argc, char *argv[])
     }
 
     /* Validate directory */
-    DWORD attrs = GetFileAttributesA(base_dir);
+    wchar_t wbase[MAX_PATH];
+    utf8_to_wide(base_dir, wbase, MAX_PATH);
+    DWORD attrs = GetFileAttributesW(wbase);
     if (attrs == INVALID_FILE_ATTRIBUTES ||
         !(attrs & FILE_ATTRIBUTE_DIRECTORY)) {
         LOG_E("Directory does not exist: %s", base_dir);

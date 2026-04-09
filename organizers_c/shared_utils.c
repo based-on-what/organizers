@@ -105,8 +105,10 @@ void format_duration(char *buf, size_t buf_size, double seconds)
 /* ------------------------------------------------------------------ */
 int validate_file_path(const char *path, long long min_size)
 {
+    wchar_t wpath[MAX_PATH];
+    utf8_to_wide(path, wpath, MAX_PATH);
     WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &fad))
+    if (!GetFileAttributesExW(wpath, GetFileExInfoStandard, &fad))
         return 0;
     if (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
         return 0;
@@ -119,8 +121,10 @@ int validate_file_path(const char *path, long long min_size)
 
 int safe_file_operation(const char *path)
 {
+    wchar_t wpath[MAX_PATH];
+    utf8_to_wide(path, wpath, MAX_PATH);
     WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (!GetFileAttributesExA(path, GetFileExInfoStandard, &fad)) {
+    if (!GetFileAttributesExW(wpath, GetFileExInfoStandard, &fad)) {
         LOG_W("File does not exist: %s", path);
         return 0;
     }
@@ -136,7 +140,7 @@ int safe_file_operation(const char *path)
         return 0;
     }
     /* Try to open for reading */
-    HANDLE h = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ,
+    HANDLE h = CreateFileW(wpath, GENERIC_READ, FILE_SHARE_READ,
                            NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (h == INVALID_HANDLE_VALUE) {
         LOG_E("Permission denied or OS error accessing: %s", path);
@@ -152,20 +156,26 @@ int safe_file_operation(const char *path)
 int save_results_to_file(const char **lines, int line_count,
                           const char *output_file, const char *title)
 {
-    FILE *f = fopen(output_file, "w");
+    wchar_t wout[MAX_PATH];
+    utf8_to_wide(output_file, wout, MAX_PATH);
+    FILE *f = _wfopen(wout, L"wb");   /* binary so we control CRLF exactly */
     if (!f) {
         LOG_E("Cannot open output file: %s", output_file);
         return 0;
     }
 
+    /* UTF-8 BOM — makes the file recognisable as UTF-8 in Notepad/editors */
+    unsigned char bom[3] = { 0xEF, 0xBB, 0xBF };
+    fwrite(bom, 1, 3, f);
+
     int title_len = (int)strlen(title);
-    fprintf(f, "%s\n", title);
+    fprintf(f, "%s\r\n", title);
     for (int i = 0; i < title_len; i++)
         fputc('=', f);
-    fprintf(f, "\n\n");
+    fprintf(f, "\r\n\r\n");
 
     for (int i = 0; i < line_count; i++)
-        fprintf(f, "%s\n", lines[i] ? lines[i] : "");
+        fprintf(f, "%s\r\n", lines[i] ? lines[i] : "");
 
     fclose(f);
     LOG_I("Results saved to: %s", output_file);
@@ -236,7 +246,20 @@ const char *str_stristr(const char *haystack, const char *needle)
 }
 
 /* ------------------------------------------------------------------ */
-/*  Recursive file finder (FindFirstFile / FindNextFile)               */
+/*  UTF-8 / UTF-16 conversion helpers                                  */
+/* ------------------------------------------------------------------ */
+void utf8_to_wide(const char *utf8, wchar_t *wide, int wide_chars)
+{
+    MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide, wide_chars);
+}
+
+void wide_to_utf8(const wchar_t *wide, char *utf8, int utf8_bytes)
+{
+    WideCharToMultiByte(CP_UTF8, 0, wide, -1, utf8, utf8_bytes, NULL, NULL);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Recursive file finder (FindFirstFileW / FindNextFileW)             */
 /* ------------------------------------------------------------------ */
 static int is_in_list_ci(const char *name, const char **list, int count)
 {
@@ -253,26 +276,30 @@ void find_files_by_extensions(
     int          recursive,
     FileList    *result)
 {
-    char pattern[MAX_PATH];
-    _snprintf(pattern, sizeof(pattern), "%s\\*", directory);
+    wchar_t wdir[MAX_PATH], wpattern[MAX_PATH];
+    utf8_to_wide(directory, wdir, MAX_PATH);
+    _snwprintf(wpattern, MAX_PATH, L"%s\\*", wdir);
 
-    WIN32_FIND_DATAA ffd;
-    HANDLE hFind = FindFirstFileA(pattern, &ffd);
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(wpattern, &ffd);
     if (hFind == INVALID_HANDLE_VALUE)
         return;
 
     do {
-        if (strcmp(ffd.cFileName, ".") == 0 ||
-            strcmp(ffd.cFileName, "..") == 0)
+        if (wcscmp(ffd.cFileName, L".") == 0 ||
+            wcscmp(ffd.cFileName, L"..") == 0)
             continue;
 
-        char full_path[MAX_PATH];
-        _snprintf(full_path, sizeof(full_path), "%s\\%s",
-                  directory, ffd.cFileName);
+        /* Convert the wide filename to UTF-8 for comparisons and storage */
+        char fname_u8[MAX_PATH * 3];
+        wide_to_utf8(ffd.cFileName, fname_u8, sizeof(fname_u8));
+
+        char full_path[MAX_PATH * 3];
+        _snprintf(full_path, sizeof(full_path), "%s\\%s", directory, fname_u8);
 
         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             if (recursive &&
-                !is_in_list_ci(ffd.cFileName, exclude_dirs, excl_count))
+                !is_in_list_ci(fname_u8, exclude_dirs, excl_count))
             {
                 find_files_by_extensions(full_path,
                                          extensions, ext_count,
@@ -281,13 +308,13 @@ void find_files_by_extensions(
             }
         } else {
             for (int i = 0; i < ext_count; i++) {
-                if (str_ends_with_ci(ffd.cFileName, extensions[i])) {
+                if (str_ends_with_ci(fname_u8, extensions[i])) {
                     filelist_add(result, full_path);
                     break;
                 }
             }
         }
-    } while (FindNextFileA(hFind, &ffd));
+    } while (FindNextFileW(hFind, &ffd));
 
     FindClose(hFind);
 }
@@ -320,7 +347,9 @@ int zip_list_files(const char *zip_path, ZipFileList *out)
     out->entries = NULL;
     out->count   = 0;
 
-    HANDLE hFile = CreateFileA(zip_path, GENERIC_READ, FILE_SHARE_READ,
+    wchar_t wzip[MAX_PATH];
+    utf8_to_wide(zip_path, wzip, MAX_PATH);
+    HANDLE hFile = CreateFileW(wzip, GENERIC_READ, FILE_SHARE_READ,
                                NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE)
         return 0;

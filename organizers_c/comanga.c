@@ -61,7 +61,9 @@ static int count_pages_pdf(const char *pdf_path)
     if (!safe_file_operation(pdf_path))
         return -1;
 
-    HANDLE hFile = CreateFileA(pdf_path, GENERIC_READ, FILE_SHARE_READ,
+    wchar_t wpdf[MAX_PATH];
+    utf8_to_wide(pdf_path, wpdf, MAX_PATH);
+    HANDLE hFile = CreateFileW(wpdf, GENERIC_READ, FILE_SHARE_READ,
                                NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         LOG_E("Cannot open PDF: %s", pdf_path);
@@ -255,11 +257,12 @@ static void process_file(const char *path, const char *display_name)
 
 static void analyze_directory(const char *dir_path)
 {
-    char pattern[MAX_PATH];
-    _snprintf(pattern, sizeof(pattern), "%s\\*", dir_path);
+    wchar_t wdir[MAX_PATH], wpattern[MAX_PATH];
+    utf8_to_wide(dir_path, wdir, MAX_PATH);
+    _snwprintf(wpattern, MAX_PATH, L"%s\\*", wdir);
 
-    WIN32_FIND_DATAA ffd;
-    HANDLE hFind = FindFirstFileA(pattern, &ffd);
+    WIN32_FIND_DATAW ffd;
+    HANDLE hFind = FindFirstFileW(wpattern, &ffd);
     if (hFind == INVALID_HANDLE_VALUE) {
         LOG_E("Cannot open directory: %s", dir_path);
         return;
@@ -269,13 +272,15 @@ static void analyze_directory(const char *dir_path)
     LOG_I("--------------------------------------------------");
 
     do {
-        if (strcmp(ffd.cFileName, ".") == 0 ||
-            strcmp(ffd.cFileName, "..") == 0)
+        if (wcscmp(ffd.cFileName, L".") == 0 ||
+            wcscmp(ffd.cFileName, L"..") == 0)
             continue;
 
-        char full_path[MAX_PATH];
-        _snprintf(full_path, sizeof(full_path), "%s\\%s",
-                  dir_path, ffd.cFileName);
+        char fname_u8[MAX_PATH * 3];
+        wide_to_utf8(ffd.cFileName, fname_u8, sizeof(fname_u8));
+
+        char full_path[MAX_PATH * 3];
+        _snprintf(full_path, sizeof(full_path), "%s\\%s", dir_path, fname_u8);
 
         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             /* Aggregate subdirectory: find all comic files recursively */
@@ -286,7 +291,7 @@ static void analyze_directory(const char *dir_path)
 
             if (fl->count > 0) {
                 ProgressReporter pr;
-                progress_init(&pr, fl->count, ffd.cFileName);
+                progress_init(&pr, fl->count, fname_u8);
 
                 int total_pages = 0;
                 for (int i = 0; i < fl->count; i++) {
@@ -300,12 +305,12 @@ static void analyze_directory(const char *dir_path)
 
                 if (g_result_count < 4096) {
                     _snprintf(g_results[g_result_count].name,
-                              sizeof(g_results[0].name), "%s", ffd.cFileName);
+                              sizeof(g_results[0].name), "%s", fname_u8);
                     g_results[g_result_count].pages = total_pages;
                     g_result_count++;
                 }
                 LOG_I("[DIR] %s: %d files, %d pages",
-                      ffd.cFileName, fl->count, total_pages);
+                      fname_u8, fl->count, total_pages);
             }
             filelist_free(fl);
 
@@ -313,14 +318,14 @@ static void analyze_directory(const char *dir_path)
             /* Individual file in the root directory */
             int is_comic = 0;
             for (int i = 0; i < COMIC_EXT_CNT; i++)
-                if (str_ends_with_ci(ffd.cFileName, COMIC_EXTS[i])) {
+                if (str_ends_with_ci(fname_u8, COMIC_EXTS[i])) {
                     is_comic = 1; break;
                 }
             if (is_comic)
-                process_file(full_path, ffd.cFileName);
+                process_file(full_path, fname_u8);
         }
 
-    } while (FindNextFileA(hFind, &ffd));
+    } while (FindNextFileW(hFind, &ffd));
 
     FindClose(hFind);
 }
@@ -390,15 +395,19 @@ int main(int argc, char *argv[])
 {
     log_init(LOG_INFO, NULL);
 
-    char dir[MAX_PATH];
+    char dir[MAX_PATH * 3];
     if (argc >= 2) {
-        _snprintf(dir, sizeof(dir), "%s", argv[1]);
+        wchar_t warg[MAX_PATH];
+        MultiByteToWideChar(CP_ACP, 0, argv[1], -1, warg, MAX_PATH);
+        wide_to_utf8(warg, dir, sizeof(dir));
     } else {
         /* Default: directory of this executable */
-        GetModuleFileNameA(NULL, dir, MAX_PATH);
+        wchar_t wdir_buf[MAX_PATH];
+        GetModuleFileNameW(NULL, wdir_buf, MAX_PATH);
         /* Strip the filename to get the directory */
-        char *last_sep = strrchr(dir, '\\');
-        if (last_sep) *last_sep = '\0';
+        wchar_t *last_sep = wcsrchr(wdir_buf, L'\\');
+        if (last_sep) *last_sep = L'\0';
+        wide_to_utf8(wdir_buf, dir, sizeof(dir));
     }
 
     LOG_I("Starting comic/manga analysis in: %s", dir);
