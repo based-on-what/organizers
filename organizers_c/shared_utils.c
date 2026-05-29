@@ -200,9 +200,11 @@ void filelist_add(FileList *list, const char *path)
 {
     if (!list || !path) return;
     if (list->count >= list->capacity) {
-        list->capacity *= 2;
-        list->paths = (char **)realloc(list->paths,
-                                        list->capacity * sizeof(char *));
+        int new_cap = list->capacity * 2;
+        char **tmp = (char **)realloc(list->paths, new_cap * sizeof(char *));
+        if (!tmp) return;
+        list->paths    = tmp;
+        list->capacity = new_cap;
     }
     list->paths[list->count++] = _strdup(path);
 }

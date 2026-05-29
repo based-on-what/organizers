@@ -116,8 +116,13 @@ static void convert_doc_to_docx(const char *input_folder)
     DIR *dir = opendir(input_folder);
     if (!dir) { LOG_E("Cannot open directory: %s", input_folder); return; }
 
-    char  doc_paths[1024][PATH_MAX];
-    int   doc_count = 0;
+    char (*doc_paths)[PATH_MAX] = malloc(1024 * sizeof(char[PATH_MAX]));
+    if (!doc_paths) {
+        LOG_E("Out of memory");
+        closedir(dir);
+        return;
+    }
+    int doc_count = 0;
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL && doc_count < 1024) {
@@ -138,6 +143,7 @@ static void convert_doc_to_docx(const char *input_folder)
 
     if (doc_count == 0) {
         LOG_I("No .doc files found in: %s", input_folder);
+        free(doc_paths);
         return;
     }
     LOG_I("Found %d .doc file(s) to convert.", doc_count);
@@ -152,6 +158,7 @@ static void convert_doc_to_docx(const char *input_folder)
         progress_update(&pr, 1);
     }
     progress_finish(&pr);
+    free(doc_paths);
 
     LOG_I("Conversion complete!");
     LOG_I("Successfully converted: %d/%d files", converted, doc_count);

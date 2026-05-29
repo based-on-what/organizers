@@ -86,12 +86,16 @@ Linux and macOS, allowing some Windows programs to run.
 Wine is **not** a supported platform for these tools; it is mentioned
 only as a last resort.
 
-### Option 3: Port the `.c` source to POSIX
+### Option 3: Use the POSIX C builds (Linux / macOS)
 
-The `.c` files can be ported to Linux/macOS by replacing each Win32 call
-with its POSIX or platform-specific equivalent.  The table in
-"Windows-Native API Substitutions" above shows what needs changing.
-The effort involved is roughly equivalent to rewriting the scripts again.
+The `organizers_posix/` folder in this repository contains C translations
+of the same scripts targeting Linux and macOS natively.  They replace each
+Win32 call with its POSIX or platform-specific equivalent (FFmpeg instead
+of Media Foundation, libcurl instead of WinHTTP, etc.) and compile
+with `gcc` or `clang` without any Windows SDK.
+
+See `organizers_posix/README.md` for compilation instructions and
+dependency installation.
 
 ---
 

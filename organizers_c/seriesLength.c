@@ -187,7 +187,7 @@ int main(int argc, char *argv[])
     char base_dir[MAX_PATH * 3];
     if (argc >= 2) {
         wchar_t warg[MAX_PATH];
-        MultiByteToWideChar(CP_ACP, 0, argv[1], -1, warg, MAX_PATH);
+        MultiByteToWideChar(CP_UTF8, 0, argv[1], -1, warg, MAX_PATH);
         wide_to_utf8(warg, base_dir, sizeof(base_dir));
     } else {
         wchar_t wdir_buf[MAX_PATH];

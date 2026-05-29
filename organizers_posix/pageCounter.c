@@ -115,7 +115,7 @@ static int count_docx_pages(const char *path)
         unsigned short extra_len   = r16(zip_buf + pos + LFH_EXTRA_LEN);
         size_t data_offset = pos + LFH_HEADER_SIZE + fname_len + extra_len;
 
-        if (fname_len == 19 &&
+        if (fname_len == 17 &&
             strncasecmp((char *)zip_buf + pos + LFH_HEADER_SIZE,
                         "word/document.xml", 17) == 0)
         {

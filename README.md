@@ -1,6 +1,6 @@
 # Organizers
 
-A collection of enhanced Python scripts for organizing and managing files based on their properties - including video duration, document formats, and media content analysis. Now featuring modern libraries, improved performance, and comprehensive error handling.
+A collection of Python scripts for organizing and managing files based on their properties — video duration, document formats, and media content analysis. The project follows a layered architecture: thin CLI entry points delegate to analyzer modules backed by pure reader and core utility packages.
 
 ## Table of Contents
 - [General Information](#general-information)
@@ -17,365 +17,308 @@ A collection of enhanced Python scripts for organizing and managing files based 
   - [doc2docx.py](#doc2docxpy)
 - [Project Structure](#project-structure)
 - [Configuration](#configuration)
-- [Performance Features](#performance-features)
 - [Troubleshooting](#troubleshooting)
 - [Contribution](#contribution)
 - [License](#license)
 - [Credits](#credits)
 
 ## General Information
-This project consists of several enhanced Python scripts that help you organize and manage different types of files:
 
-- **Video files** by duration with robust error handling
+Six CLI scripts that help you organize different types of files:
+
+- **Video files** by duration
 - **Books and documents** by page count (PDF, EPUB, DOCX)
-- **Steam games** by completion time using HowLongToBeat data
-- **TV series** by total duration with series-level analysis
-- **Comics/manga** by page count (CBZ, CBR, EPUB, PDF)
-- **Legacy Word documents** converted to modern format (cross-platform)
-
-### Recent Improvements ✨
-- **Modern Libraries**: Replaced deprecated PyPDF2 with pypdf, removed unmaintained mobi library
-- **Performance**: Added progress reporting, concurrent processing capabilities, and optimized algorithms
-- **Cross-platform**: Enhanced compatibility across Windows, macOS, and Linux
-- **Error Handling**: Comprehensive error handling with detailed logging
-- **Code Quality**: Reduced code duplication, improved type hints, and consistent interfaces
-- **Shared Utilities**: Common functionality extracted to shared modules
+- **Steam games** by HowLongToBeat completion time
+- **TV series** by total duration, grouped by subdirectory
+- **Comics and manga** by page count (CBZ, CBR, EPUB, PDF)
+- **Legacy Word documents** converted to modern DOCX format
 
 ## Features
-- **📹 Video Analysis**: Comprehensive video duration analysis with support for multiple formats
-- **📚 Document Processing**: Page counting for PDF, EPUB, and DOCX files with modern libraries
-- **🎮 Game Library Analysis**: Steam game completion time analysis using HowLongToBeat data
-- **📺 TV Series Organization**: Calculate total duration for TV series collections
-- **📖 Comic/Manga Management**: Page counting for comic book formats (CBZ, CBR, EPUB, PDF)
-- **📄 Document Conversion**: Cross-platform DOC to DOCX conversion
-- **🚀 Performance Features**: Progress reporting, batch processing, and optimized algorithms
-- **🔧 Error Handling**: Robust error handling with detailed logging and recovery
-- **🌐 Cross-platform**: Works on Windows, macOS, and Linux
-- **⚡ Modern Dependencies**: Uses maintained, up-to-date libraries
+
+- **Video Analysis**: duration analysis for MP4, AVI, MKV, MOV, WMV, FLV, WEBM
+- **Document Processing**: page counting for PDF, EPUB, DOCX
+- **Game Library Analysis**: Steam library + HowLongToBeat integration
+- **TV Series Organization**: total duration per series folder
+- **Comic/Manga Management**: page counting for CBZ, CBR, EPUB, PDF
+- **Document Conversion**: DOC to DOCX with Word COM (Windows) or LibreOffice fallback
+- **Progress Reporting**: stderr progress bars keep stdout clean for piping
+- **Layered Architecture**: CLI, analyzer, reader, and core layers with clear responsibilities
+- **Lazy Dependencies**: heavy libraries loaded on first use; missing ones fail with a clear install hint
+- **Cross-platform**: Windows, macOS, Linux
 
 ## Technologies Used
+
 ### Core Dependencies
-- **Python 3.8+** - Modern Python with type hints support
-- **pypdf 4.0+** - Modern PDF processing (replaces deprecated PyPDF2)
-- **python-docx 1.1+** - Enhanced Word document processing
-- **ebooklib 0.18+** - EPUB file processing
-- **moviepy 2.0+** - Video file analysis and processing
-- **rarfile 4.0+** - RAR archive processing for comic books
+- **Python 3.8+**
+- **pypdf 3.0+** — PDF reading (falls back to PyPDF2 if pypdf is absent)
+- **python-docx 0.8.11+** — DOCX reading and page estimation
+- **ebooklib 0.18+** — EPUB processing
+- **moviepy 1.0.3+** — video duration reading
+- **rarfile 4.0+** — CBR archive reading
 
 ### API Integration
-- **requests 2.31+** - HTTP requests for Steam API integration
-- **howlongtobeatpy 1.0.7+** - Game completion time data
+- **requests 2.28+** — Steam Web API calls
+- **howlongtobeatpy 1.0+** — HowLongToBeat game data
 
-### Cross-platform Compatibility
-- **comtypes 1.2+** (Windows) - Alternative COM interface
-- **LibreOffice** (Linux/macOS) - Cross-platform document conversion
+### Platform-specific
+- **pywin32 305+** (Windows only) — Microsoft Word COM interface for DOC conversion
+- **LibreOffice** (Linux/macOS) — DOC conversion fallback
 
 ## Prerequisites
-- **Python 3.8 or higher** - Required for modern type hints and features
-- **pip** - Python package manager for installing dependencies
 
-### Optional Requirements
-- **Steam account** (for steamSorter.py) - To fetch game library data
-- **Steam Web API key** (for steamSorter.py) - Get from [Steam Developer Portal](https://steamcommunity.com/dev/apikey)
-- **Microsoft Word** or **LibreOffice** (for doc2docx.py) - For document conversion
-- **RAR tools** (for CBR comic files) - May require additional system packages
+- **Python 3.8 or higher**
+- **pip**
+
+### Optional
+- Steam Web API key for `steamSorter.py` — get one at [Steam Developer Portal](https://steamcommunity.com/dev/apikey)
+- Microsoft Word or LibreOffice for `doc2docx.py`
+- RAR tools (`unrar`) for CBR comic files
 
 ## Installation
 
-### Quick Start
-1. **Clone this repository:**
 ```bash
 git clone https://github.com/based-on-what/organizers.git
-```
-
-2. **Navigate to the project directory:**
-```bash
 cd organizers
-```
-
-3. **Install required dependencies:**
-```bash
 pip install -r requirements.txt
 ```
 
-### Alternative Installation Methods
+### System packages
 
-#### Using pip install (individual packages):
+#### Linux/Ubuntu
 ```bash
-# Core dependencies
-pip install pypdf python-docx ebooklib moviepy rarfile
-
-# API integration
-pip install requests howlongtobeatpy
-
-# Windows-specific (optional)
-pip install comtypes  # Only on Windows
-
-# Optional enhancements
-pip install tqdm click
+sudo apt-get install unrar-free libreoffice
 ```
 
-#### Using conda:
+#### macOS
 ```bash
-conda install -c conda-forge moviepy pypdf python-docx ebooklib requests
-pip install howlongtobeatpy rarfile  # Not available in conda
-```
-
-### System-specific Setup
-
-#### Linux/Ubuntu:
-```bash
-# Install system dependencies for RAR support
-sudo apt-get update
-sudo apt-get install unrar-free
-
-# For LibreOffice document conversion
-sudo apt-get install libreoffice
-```
-
-#### macOS:
-```bash
-# Using Homebrew
 brew install unrar libreoffice
 ```
 
-#### Windows:
-- Install Microsoft Word for best DOC conversion support
-- Or install LibreOffice as a free alternative
+#### Windows
+Install Microsoft Word or LibreOffice. `pywin32` is included in `requirements.txt` and installed automatically on Windows.
 
 ## Usage
 
-All scripts now feature enhanced CLI interfaces with detailed logging and progress reporting.
-
 ### length.py
-**Enhanced Video Duration Analyzer** - Analyzes video files with robust error handling and multiple output formats.
+
+Analyzes video file durations in a directory tree.
 
 ```bash
-# Basic usage (current directory)
+# Current directory
 python length.py
 
-# Analyze specific directory with custom output
+# Specific directory, custom output file
 python length.py /path/to/videos -o my_analysis.txt
 
-# JSON output format
+# JSON output
 python length.py -f json -o analysis.json
 
-# Custom file extensions and exclusions
+# Custom extensions and excluded subdirectory names
 python length.py -e .mp4 .mkv .avi -x Subtitles Extras
 
-# Debug mode with detailed logging
+# Verbose logging
 python length.py -l DEBUG
 ```
 
-**Features:**
-- Supports multiple video formats (MP4, AVI, MKV, MOV, WMV, FLV, WEBM)
-- Progress reporting during analysis
-- Detailed logging with timestamps
-- JSON and text output formats
-- Customizable file extension filtering
-- Directory exclusion support
+**Arguments:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `directory` | `.` | Directory to analyze |
+| `-o` | `video_duration_analysis.txt` | Output file path |
+| `-f` | `txt` | Output format: `txt` or `json` |
+| `-e` | `.mp4 .avi .mkv .mov .wmv .flv .webm` | File extensions to include |
+| `-x` | `Sub Subs Subtitles Featurettes Extras` | Subdirectory names to skip |
+| `-l` | `INFO` | Log level: `DEBUG INFO WARNING ERROR` |
+
+Output file: `video_duration_analysis.txt` (or path given with `-o`).
+Log file: `video_analyzer.log`.
 
 ### pageCounter.py
-**Enhanced Document Page Counter** - Counts pages in modern document formats with improved error handling.
+
+Counts pages in documents in the current directory (non-recursive).
 
 ```bash
-# Count pages in current directory
 python pageCounter.py
 ```
 
-**Features:**
-- **Supported formats**: PDF, EPUB, DOCX (MOBI support removed due to deprecated library)
-- Modern pypdf library for better PDF compatibility
-- Enhanced error reporting
-- Progress tracking for multiple files
-- UTF-8 output encoding
+**Supported formats:** PDF, EPUB, DOCX.
 
-**Note**: DOC files are no longer supported directly. Use `doc2docx.py` to convert them first.
+DOCX page count is estimated: explicit page breaks are counted, and if none are found, total characters divided by 2000 is used as a fallback.
+
+Output file: `document_page_counts.txt`.
 
 ### steamSorter.py
-**Enhanced Steam Game Analyzer** - Analyzes Steam libraries with HowLongToBeat completion time data.
+
+Fetches your Steam library and looks up main-story completion times from HowLongToBeat.
+
+**Setup — set environment variables before running:**
+
+```bash
+# Linux/macOS
+export STEAM_API_KEY="your_api_key_here"
+export STEAM_IDS="76561197960287930,76561197960287931"
+
+# Windows (PowerShell)
+$env:STEAM_API_KEY = "your_api_key_here"
+$env:STEAM_IDS    = "76561197960287930,76561197960287931"
+```
 
 ```bash
 python steamSorter.py
 ```
 
-**Setup Required:**
-1. Get a Steam Web API key from [Steam Developer Portal](https://steamcommunity.com/dev/apikey)
-2. Edit the script and add your API key and Steam IDs:
-```python
-api_key = "your_steam_api_key_here"
-steam_ids = ["your_steam_id", "friend_steam_id"]
-```
+`STEAM_IDS` accepts one or more comma-separated Steam 64-bit user IDs. Duplicate games across libraries are deduplicated. HLTB requests are rate-limited to one per second.
 
-**Features:**
-- Fetches games from multiple Steam libraries
-- HowLongToBeat integration for completion times
-- Error handling for API failures
-- Progress reporting during analysis
-- Comprehensive completion time statistics
+Output file: `steam_games_completion_times.txt`.
 
 ### seriesLength.py
-**TV Series Duration Analyzer** - Calculates total duration for TV series organized in subdirectories.
+
+Calculates total video duration for each subdirectory of the current directory, treating each subdirectory as a separate TV series.
 
 ```bash
 python seriesLength.py
 ```
 
-**Features:**
-- Processes each subdirectory as a separate TV series
-- Recursive video file scanning
-- Series-level duration reporting
-- Improved progress tracking
+Output file: `series_durations.txt`.
+
 ### comanga.py
-**Enhanced Comic/Manga Page Counter** - Analyzes comic books and graphic novels with support for multiple archive formats.
+
+Counts pages in comic/manga files and directories.
 
 ```bash
-# Analyze current directory
+# Current directory
 python comanga.py
 
-# Analyze specific directory
+# Specific directory
 python comanga.py /path/to/comics
 ```
 
-**Features:**
-- **Supported formats**: CBZ, CBR, EPUB, PDF
-- Analyzes both individual files and subdirectories
-- Recursive scanning for organized collections
-- Modern pypdf library for PDF support
-- Progress reporting for large collections
-- Detailed error handling and logging
+**Supported formats:** CBZ, CBR, EPUB, PDF.
+
+Each immediate child of the target directory is analyzed: files are counted directly, subdirectories are scanned recursively (treated as series). Processing is parallelized with a thread pool (up to 8 workers).
+
+Output file: `comanga_page_counts.txt`.
 
 ### doc2docx.py
-**Cross-platform DOC to DOCX Converter** - Converts legacy Word documents with multiple conversion methods.
+
+Converts all `.doc` files in the current directory to `.docx`.
 
 ```bash
-# Convert all .doc files in current directory
 python doc2docx.py
-
-# Files are saved to ./output/ directory
 ```
 
-**Features:**
-- **Cross-platform support**: Works on Windows, macOS, and Linux
-- **Multiple conversion methods**:
-  - Microsoft Word COM interface (Windows)
-  - LibreOffice headless mode (all platforms)
-- Automatic fallback between conversion methods
-- Progress reporting for batch conversions
-- Comprehensive error handling
-- Output to separate directory to preserve originals
+Converted files are written to `./output/`. Original `.doc` files are not modified.
 
-**Platform Notes:**
-- **Windows**: Best results with Microsoft Word installed
-- **Linux/macOS**: Requires LibreOffice for conversion
-- **Fallback**: Attempts multiple methods automatically
+**Conversion backends (tried in order):**
+1. Microsoft Word via COM (Windows, requires pywin32 + Word installed)
+2. LibreOffice headless (all platforms)
 
 ## Project Structure
 
-```text
+```
 organizers/
-├── README.md
-├── shared_utils.py
-├── length.py
-├── seriesLength.py
-├── pageCounter.py
-├── comanga.py
-├── doc2docx.py
-└── steamSorter.py
+├── requirements.txt
+├── shared_utils.py          # backward-compat re-export shim
+├── length.py                # CLI: video duration analyzer
+├── seriesLength.py          # CLI: TV series duration analyzer
+├── pageCounter.py           # CLI: document page counter
+├── comanga.py               # CLI: comic/manga page counter
+├── doc2docx.py              # CLI: DOC to DOCX converter
+├── steamSorter.py           # CLI: Steam game completion analyzer
+├── core/
+│   ├── formatters.py        # pure formatting helpers (duration, file size)
+│   ├── fs.py                # file discovery and access checks
+│   ├── loaders.py           # lazy-import registry for optional dependencies
+│   ├── log.py               # logging setup
+│   └── output.py            # ProgressReporter and file-writing helpers
+├── readers/
+│   ├── pages.py             # pure page-count readers (PDF, EPUB, CBZ, CBR, DOCX)
+│   └── video.py             # pure video duration reader
+├── analyzers/
+│   ├── comics.py            # comic/manga directory scanner with thread pool
+│   ├── documents.py         # document directory scanner
+│   ├── steam.py             # SteamClient, HltbClient, analyze_libraries()
+│   └── video.py             # analyze_flat() and analyze_series()
+└── converters/
+    └── doc2docx.py          # DOC-to-DOCX conversion backends and orchestration
 ```
 
-### Maintenance Notes
-- Logging is explicitly imported in each executable script for reliable module-level logging calls.
-- Runtime constants now use named values where appropriate (for example, minimum video file size in `length.py`).
-- Broad bare `except:` handlers were narrowed to `except Exception:` where silent cleanup is required.
+### Layer responsibilities
+
+| Layer | Responsibility |
+|-------|---------------|
+| CLI entry points | Argument parsing, logging setup, display, output file writing |
+| `analyzers/` | Directory scanning, orchestration, progress reporting |
+| `readers/` | Reading a single file and returning raw data |
+| `core/` | Formatting, filesystem utilities, lazy loaders, logging, output helpers |
+
+`shared_utils.py` is a backward-compatibility shim that re-exports symbols from `core/` and `readers/`. New code should import directly from those packages.
 
 ## Configuration
 
-### Shared Configuration
-All scripts now use a common configuration system through `shared_utils.py`. You can customize:
-
-- **Logging levels**: DEBUG, INFO, WARNING, ERROR
-- **File extensions**: Supported formats for each script
-- **Output formats**: Text, JSON (where applicable)
-- **Progress reporting**: Enable/disable progress bars
-
 ### Environment Variables
-Set these optional environment variables for enhanced functionality:
 
-```bash
-# Steam API configuration
-export STEAM_API_KEY="your_api_key_here"
-export STEAM_USER_IDS="id1,id2,id3"
+| Variable | Used by | Description |
+|----------|---------|-------------|
+| `STEAM_API_KEY` | `steamSorter.py` | Steam Web API key (required) |
+| `STEAM_IDS` | `steamSorter.py` | Comma-separated Steam 64-bit user IDs (required) |
 
-# Logging configuration
-export LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
-```
+### Logging
 
-## Performance Features
-
-### Optimizations Implemented
-- **Shared utilities**: Eliminated code duplication (~120 lines reduced)
-- **Modern libraries**: Replaced deprecated dependencies
-- **Progress reporting**: Real-time progress for long operations
-- **Error recovery**: Graceful handling of corrupted files
-- **Memory efficiency**: Proper resource cleanup
-- **Batch processing**: Optimized for large file collections
-
-### Performance Tips
-- Use SSD storage for faster file access
-- Process files locally rather than over network
-- Use appropriate log levels (INFO for normal use, DEBUG for troubleshooting)
-- Consider excluding large subtitle/extras directories
+All scripts use the `organizers` logger. Log level defaults to `INFO`. `length.py` additionally writes to `video_analyzer.log`. Pass `-l DEBUG` to `length.py` for verbose output; other scripts are INFO-only.
 
 ## Troubleshooting
 
-### Common Issues
+### Import errors
 
-#### Import Errors
 ```bash
-# If you get import errors, install missing packages:
-pip install pypdf python-docx ebooklib moviepy
+# Core dependencies
+pip install pypdf python-docx ebooklib moviepy rarfile
 
-# For specific errors:
-# ModuleNotFoundError: No module named 'pypdf'
-pip install pypdf
+# API tools
+pip install requests howlongtobeatpy
 
-# ModuleNotFoundError: No module named 'moviepy'
-pip install moviepy
+# Windows DOC conversion
+pip install pywin32
 ```
 
-#### Video Processing Issues
-- **Codec problems**: Install additional codec packages
-- **Corrupted files**: Scripts now skip and report problematic files
-- **Large files**: Increase system memory or process in smaller batches
+### Video processing
 
-#### Document Processing Issues
-- **PDF encryption**: Some encrypted PDFs cannot be processed
-- **DOCX page counting**: Results are estimates based on content analysis
-- **CBR files**: Requires RAR tools installation on system
+- Files smaller than 100 KB are skipped (trailers, thumbnails).
+- Corrupted or codec-unsupported files are logged and skipped.
 
-#### Steam API Issues
-- **API key invalid**: Verify your Steam Web API key
-- **Rate limiting**: Script includes automatic retry with delays
-- **Game not found**: HowLongToBeat database may not have all games
+### Document processing
 
-### Getting Help
-1. Check the logs generated by each script
-2. Run with `-l DEBUG` for detailed information
-3. Verify all dependencies are installed correctly
-4. Check file permissions and accessibility
+- Encrypted PDFs cannot be read and are skipped.
+- DOCX page counts are estimates; results may differ from Word's page count.
+- CBR files require `unrar` or `unrar-free` to be installed on the system.
+
+### Steam
+
+- `STEAM_API_KEY` and `STEAM_IDS` must be set before running.
+- HLTB data may be missing for niche or very new games.
+- The script is rate-limited to 1 HLTB request per second to avoid being blocked.
+
+### Getting help
+
+1. Check the log output for per-file error messages.
+2. Run `length.py` with `-l DEBUG` for detailed video processing logs.
+3. Verify all dependencies are installed with `pip list`.
 
 ## Contribution
-Contributions are welcome! To contribute:
+
 1. Fork the repository
 2. Create a new branch
 3. Make your changes
 4. Submit a pull request
 
-Please report any issues in the Issues section.
+Please report issues in the Issues section.
 
 ## License
-No license file is currently included in this repository. Add a `LICENSE` file to define usage and distribution terms.
+
+No license file is currently included. Add a `LICENSE` file to define usage and distribution terms.
 
 ## Credits
-- @based-on-what - Main developer
+
+- @based-on-what — Main developer

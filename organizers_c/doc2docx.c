@@ -283,8 +283,13 @@ static void convert_doc_to_docx(const char *input_folder)
     HANDLE hFind = FindFirstFileW(wpattern, &ffd);
 
     /* Collect doc files */
-    char doc_paths[1024][MAX_PATH];
-    char doc_stems[1024][MAX_PATH];
+    char (*doc_paths)[MAX_PATH] = (char (*)[MAX_PATH])malloc(1024 * sizeof(char[MAX_PATH]));
+    char (*doc_stems)[MAX_PATH] = (char (*)[MAX_PATH])malloc(1024 * sizeof(char[MAX_PATH]));
+    if (!doc_paths || !doc_stems) {
+        free(doc_paths); free(doc_stems);
+        LOG_E("Out of memory");
+        return;
+    }
     int  doc_count = 0;
 
     if (hFind != INVALID_HANDLE_VALUE) {
@@ -313,6 +318,7 @@ static void convert_doc_to_docx(const char *input_folder)
 
     if (doc_count == 0) {
         LOG_I("No .doc files found in: %s", input_folder);
+        free(doc_paths); free(doc_stems);
         return;
     }
     LOG_I("Found %d .doc file(s) to convert.", doc_count);
@@ -369,6 +375,7 @@ static void convert_doc_to_docx(const char *input_folder)
     if (com_ok) CoUninitialize();
 
     progress_finish(&pr);
+    free(doc_paths); free(doc_stems);
 
     LOG_I("Conversion complete!");
     LOG_I("Successfully converted: %d/%d files", converted, doc_count);
@@ -390,7 +397,7 @@ int main(int argc, char *argv[])
     char folder[MAX_PATH * 3];
     if (argc >= 2) {
         wchar_t warg[MAX_PATH];
-        MultiByteToWideChar(CP_ACP, 0, argv[1], -1, warg, MAX_PATH);
+        MultiByteToWideChar(CP_UTF8, 0, argv[1], -1, warg, MAX_PATH);
         wide_to_utf8(warg, folder, sizeof(folder));
     } else {
         wchar_t wdir_buf[MAX_PATH];

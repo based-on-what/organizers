@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
     for (int i = 1; i < argc; i++) {
         if (argv[i][0] != '-') {
             wchar_t warg[MAX_PATH];
-            MultiByteToWideChar(CP_ACP, 0, argv[i], -1, warg, MAX_PATH);
+            MultiByteToWideChar(CP_UTF8, 0, argv[i], -1, warg, MAX_PATH);
             wide_to_utf8(warg, base_dir, sizeof(base_dir));
         } else if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
             _snprintf(output_file, sizeof(output_file), "%s", argv[++i]);

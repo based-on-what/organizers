@@ -116,6 +116,7 @@ Replace `gcc` with `clang` on macOS if preferred — both accept the same flags.
 > **`pkg-config` not found?**
 > On macOS you may need: `brew install pkg-config`
 > Or replace the `$(pkg-config ...)` with explicit flags, for example:
+>
 > ```bash
 > # length on macOS without pkg-config
 > clang -std=c11 -O2 length.c shared_utils.c -o length \
@@ -140,7 +141,7 @@ gcc -std=c11 -O2 length.c shared_utils.c -o length \
 
 All tools default to the current working directory.
 
-```
+```text
 ./comanga [directory]
     Count pages in CBZ/CBR/EPUB/PDF files.
     Output: page_count_results.txt
@@ -192,3 +193,10 @@ All tools default to the current working directory.
 | `pageCounter.py` | `pageCounter.c` |
 | `seriesLength.py` | `seriesLength.c` |
 | `steamSorter.py` | `steamSorter.c` |
+
+---
+
+## Related
+
+- `organizers_c/` — Windows-native C builds using Win32 APIs and pre-compiled `.exe` binaries.
+- `organizers_posix/` — this folder; Linux and macOS builds using POSIX APIs and FFmpeg/libcurl.

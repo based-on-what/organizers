@@ -158,7 +158,7 @@ static int json_next_value(const char *json_str, size_t *pos,
 
     const char *p = found + pat_len;
     /* Skip whitespace and colon */
-    while (*p == ' ' || *p == '\t' || *p == ':' || *p == ' ') p++;
+    while (*p == ' ' || *p == '\t' || *p == ':') p++;
 
     if (*p == '"') {
         /* String value */
