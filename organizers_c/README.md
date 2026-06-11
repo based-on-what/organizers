@@ -1,5 +1,14 @@
 # organizers_c — Windows-Native C Translations
 
+> **Status: FROZEN / unmaintained.** These ports are kept as a reference
+> implementation and learning resource. New features and fixes land in the
+> Python tools only; this code receives no functional updates. CI compiles
+> this tree on every push (MSVC, see `.github/workflows/ci.yml`) so it
+> cannot silently rot, but behavior may drift from the Python versions.
+> Built with **Visual Studio Build Tools (MSVC `cl`)** — see the
+> compilation instructions below.
+> Compiled binaries (`.exe`/`.obj`) are no longer committed to the repo.
+
 This folder contains C (C99/C11) rewrites of every Python script in the
 `organizers/` repository, targeting **native Windows execution only**.
 

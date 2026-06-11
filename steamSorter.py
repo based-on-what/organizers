@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """Steam game duration analyzer CLI entry point."""
 
-import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
-from analyzers.steam import SteamClient, HltbClient, analyze_libraries
+from analyzers.steam import (
+    HltbCache,
+    HltbClient,
+    SteamClient,
+    analyze_libraries,
+    default_cache_path,
+)
+from core.cli import build_parser
 from core.log import setup_logging
-from core.output import save_results_to_file
+from core.output import save_results
 
 
-def save_game_results(games_dict: Dict[str, Optional[float]], output_file: str) -> None:
+def save_game_results(
+    games_dict: Dict[str, Optional[float]], output_file: str, fmt: str = "txt"
+) -> None:
     valid_games = {name: h for name, h in games_dict.items() if h is not None}
     sorted_games = dict(sorted(valid_games.items(), key=lambda x: x[1]))
 
@@ -31,11 +39,26 @@ def save_game_results(games_dict: Dict[str, Optional[float]], output_file: str) 
             f"Average completion time: {avg_hours:.1f} hours",
         ])
 
-    save_results_to_file(results_text, Path(output_file), "STEAM GAMES BY COMPLETION TIME")
+    json_payload = {
+        "games": [{"name": n, "hours": h} for n, h in sorted_games.items()],
+        "total_with_data": len(sorted_games),
+        "total_processed": len(games_dict),
+    }
+    save_results(
+        Path(output_file), results_text, json_payload,
+        "STEAM GAMES BY COMPLETION TIME", fmt,
+    )
 
 
-def main() -> None:
-    logger = setup_logging("INFO")
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = build_parser(
+        "Sort Steam library by HowLongToBeat completion time "
+        "(requires STEAM_API_KEY and STEAM_IDS env vars)",
+        default_output="steam_games_completion_times.txt",
+        with_directory=False,
+    )
+    args = parser.parse_args(argv)
+    logger = setup_logging(args.log_level)
 
     api_key = os.environ.get("STEAM_API_KEY", "").strip()
     raw_ids = os.environ.get("STEAM_IDS", "").strip()
@@ -54,24 +77,29 @@ def main() -> None:
 
     logger.info(f"Analyzing {len(steam_ids)} Steam libraries...")
 
-    steam = SteamClient(api_key)
-    hltb = HltbClient()
-    games_completion_times = analyze_libraries(steam, hltb, steam_ids)
+    try:
+        steam = SteamClient(api_key)
+        hltb = HltbClient()
+    except ImportError as e:
+        logger.error(str(e))
+        return
+
+    cache = HltbCache(default_cache_path())
+    games_completion_times = analyze_libraries(steam, hltb, steam_ids, cache=cache)
 
     if not games_completion_times:
         logger.warning("No games found in any of the provided libraries!")
         return
 
-    output_file = "steam_games_completion_times.txt"
-    save_game_results(games_completion_times, output_file)
-    logger.info(f"Analysis complete! Results saved to {output_file}")
+    save_game_results(games_completion_times, args.output, args.format)
+    logger.info(f"Analysis complete! Results saved to {args.output}")
 
     total_games = len(games_completion_times)
     games_with_data = len([g for g in games_completion_times.values() if g is not None])
-    logger.info(f"\nSummary:")
-    logger.info(f"Total games analyzed: {total_games}")
-    logger.info(f"Games with completion data: {games_with_data}")
-    logger.info(f"Games without data: {total_games - games_with_data}")
+    print("\nSummary:")
+    print(f"Total games analyzed: {total_games}")
+    print(f"Games with completion data: {games_with_data}")
+    print(f"Games without data: {total_games - games_with_data}")
 
 
 if __name__ == "__main__":

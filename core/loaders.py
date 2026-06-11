@@ -13,6 +13,8 @@ _EPUB_MODULES = None
 _RAR_FILE = None
 _VIDEO_FILE_CLIP = None
 _DOCX_DOCUMENT = None
+_REQUESTS_MOD = None
+_HLTB_CLS = None
 
 
 def get_pdf_reader():
@@ -28,7 +30,9 @@ def get_pdf_reader():
                 _log.warning("Using deprecated PyPDF2. Install pypdf instead.")
                 _PDF_READER = PdfReader
             except ImportError:
-                raise ImportError("Neither pypdf nor PyPDF2 available. Install with: pip install pypdf")
+                raise ImportError(
+                    "Neither pypdf nor PyPDF2 available. Install with: pip install pypdf"
+                ) from None
     return _PDF_READER
 
 
@@ -41,7 +45,7 @@ def get_epub_modules():
             from ebooklib import epub
             _EPUB_MODULES = (ebooklib, epub)
         except ImportError:
-            raise ImportError("ebooklib required. Install with: pip install ebooklib")
+            raise ImportError("ebooklib required. Install with: pip install ebooklib") from None
     return _EPUB_MODULES
 
 
@@ -53,7 +57,7 @@ def get_rar_file():
             from rarfile import RarFile
             _RAR_FILE = RarFile
         except ImportError:
-            raise ImportError("rarfile required. Install with: pip install rarfile")
+            raise ImportError("rarfile required. Install with: pip install rarfile") from None
     return _RAR_FILE
 
 
@@ -65,7 +69,7 @@ def get_video_file_clip():
             from moviepy.editor import VideoFileClip
             _VIDEO_FILE_CLIP = VideoFileClip
         except ImportError:
-            raise ImportError("moviepy required. Install with: pip install moviepy")
+            raise ImportError("moviepy required. Install with: pip install moviepy") from None
     return _VIDEO_FILE_CLIP
 
 
@@ -77,5 +81,33 @@ def get_docx_document():
             from docx import Document
             _DOCX_DOCUMENT = Document
         except ImportError:
-            raise ImportError("python-docx required. Install with: pip install python-docx")
+            raise ImportError(
+                "python-docx required. Install with: pip install python-docx"
+            ) from None
     return _DOCX_DOCUMENT
+
+
+def get_requests():
+    """Return the requests module."""
+    global _REQUESTS_MOD
+    if _REQUESTS_MOD is None:
+        try:
+            import requests
+            _REQUESTS_MOD = requests
+        except ImportError:
+            raise ImportError("requests required. Install with: pip install requests") from None
+    return _REQUESTS_MOD
+
+
+def get_howlongtobeat():
+    """Return HowLongToBeat class."""
+    global _HLTB_CLS
+    if _HLTB_CLS is None:
+        try:
+            from howlongtobeatpy import HowLongToBeat
+            _HLTB_CLS = HowLongToBeat
+        except ImportError:
+            raise ImportError(
+                "howlongtobeatpy required. Install with: pip install howlongtobeatpy"
+            ) from None
+    return _HLTB_CLS

@@ -3,6 +3,10 @@ Comic/manga directory analyzer.
 
 Responsibility: scan a directory, count pages per item, return results dict.
 No display, no file writing — that belongs in the CLI entry point.
+
+The thread pool consumes individual files, not top-level items, so one giant
+series directory cannot starve the other workers. Results are aggregated per
+top-level item on the main thread (as_completed), so no locking is needed.
 """
 import logging
 import os
@@ -23,6 +27,18 @@ _EXTENSIONS = supported_extensions() - frozenset({'.docx'})
 _MAX_WORKERS = min(8, (os.cpu_count() or 4))
 
 
+def _count_file(file_path: Path) -> int:
+    """Page count for one file; 0 when inaccessible or unreadable."""
+    try:
+        if not safe_file_operation(file_path):
+            _log.warning(f"Skipping inaccessible file: {file_path}")
+            return 0
+        return count_pages(file_path)
+    except Exception as e:
+        _log.error(f"Error processing {file_path.name}: {e}")
+        return 0
+
+
 def analyze_directory(directory: Path) -> Dict[str, int]:
     """
     Return {name: page_count} for each item directly under directory.
@@ -35,66 +51,33 @@ def analyze_directory(directory: Path) -> Dict[str, int]:
         return results
 
     _log.info(f"Analyzing: {directory}")
-    _log.info("-" * 50)
 
+    # (item_name, file) pairs — the pool works on files so all workers stay busy
     work = []
     for item in directory.iterdir():
         if item.is_dir():
-            work.append((item, True))
+            results[item.name] = 0
+            for f in find_files_by_extensions(item, _EXTENSIONS, recursive=True):
+                work.append((item.name, f))
         elif item.suffix.lower() in _EXTENSIONS:
-            work.append((item, False))
+            results[item.name] = 0
+            work.append((item.name, item))
 
     if not work:
         return results
 
-    def _process(item: Path, is_dir: bool):
-        return item.name, (_count_series(item) if is_dir else _count_single(item))
-
+    progress = ProgressReporter(len(work), "Counting pages")
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
-        futures = {pool.submit(_process, item, is_dir): item for item, is_dir in work}
+        futures = {pool.submit(_count_file, f): name for name, f in work}
         for fut in as_completed(futures):
             try:
-                name, count = fut.result()
-                results[name] = count
+                results[futures[fut]] += fut.result()
             except Exception as e:
-                _log.error(f"Unexpected error processing {futures[fut].name}: {e}")
+                _log.error(f"Unexpected error processing {futures[fut]}: {e}")
+            progress.update()
+    progress.finish()
+
+    for name, pages in results.items():
+        _log.info(f"📄 {name}: {pages} pages")
 
     return results
-
-
-def _count_series(directory: Path) -> int:
-    files = find_files_by_extensions(directory, _EXTENSIONS, recursive=True)
-    if not files:
-        return 0
-
-    total = 0
-    file_count = 0
-    progress = ProgressReporter(len(files), f"Processing {directory.name}")
-
-    for f in files:
-        try:
-            if safe_file_operation(f):
-                total += count_pages(f)
-                file_count += 1
-            else:
-                _log.warning(f"Skipping inaccessible file: {f}")
-        except Exception as e:
-            _log.error(f"Error processing {f.name}: {e}")
-        progress.update()
-
-    progress.finish()
-    _log.info(f"📁 {directory.name}: {file_count} files, {total} pages")
-    return total
-
-
-def _count_single(file_path: Path) -> int:
-    try:
-        if not safe_file_operation(file_path):
-            _log.warning(f"Skipping inaccessible file: {file_path}")
-            return 0
-        pages = count_pages(file_path)
-        _log.info(f"📄 {file_path.name}: {pages} pages")
-        return pages
-    except Exception as e:
-        _log.error(f"Error processing {file_path.name}: {e}")
-        return 0

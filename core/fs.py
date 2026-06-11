@@ -3,7 +3,7 @@ import logging
 import os
 import stat as _stat
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Iterator, Optional, Set
 
 _log = logging.getLogger("organizers")
 
@@ -43,12 +43,16 @@ def find_files_by_extensions(
     extensions: Set[str],
     exclude_dirs: Optional[Set[str]] = None,
     recursive: bool = True,
-) -> List[Path]:
-    """Find files with given extensions. Uses os.walk (Python 3.6+ compatible)."""
+) -> Iterator[Path]:
+    """
+    Yield files with given extensions as they are discovered.
+    Streaming: on huge trees processing can start before the walk finishes
+    and the full file list never sits in memory. Callers needing a count
+    (e.g. for ProgressReporter totals) materialize with list().
+    """
     if exclude_dirs is None:
         exclude_dirs = set()
 
-    files: List[Path] = []
     try:
         if recursive:
             for root, dirs, filenames in os.walk(directory):
@@ -56,12 +60,10 @@ def find_files_by_extensions(
                 for filename in filenames:
                     p = Path(root) / filename
                     if p.suffix.lower() in extensions:
-                        files.append(p)
+                        yield p
         else:
             for entry in os.scandir(directory):
                 if entry.is_file() and Path(entry.name).suffix.lower() in extensions:
-                    files.append(Path(entry.path))
+                    yield Path(entry.path)
     except OSError:
         _log.exception(f"Error searching for files in {directory}")
-
-    return files

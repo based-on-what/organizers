@@ -10,6 +10,7 @@ No CLI argument parsing — that belongs in the entry point.
 """
 import logging
 import platform
+import shutil
 import subprocess
 from pathlib import Path
 from typing import List, Optional
@@ -24,36 +25,46 @@ _PLATFORM_WINDOWS = platform.system() == "Windows"
 _WIN32_AVAILABLE = False
 if _PLATFORM_WINDOWS:
     try:
-        import win32com.client as win32  # noqa: F401
         import pywintypes  # noqa: F401
+        import win32com.client as win32  # noqa: F401
         _WIN32_AVAILABLE = True
     except ImportError:
         pass
 
+# Consecutive Word COM failures before the instance is restarted —
+# a corrupt document can leave Word in a state where every later call fails
+_WORD_RESTART_AFTER = 2
+
+_SOFFICE_PATH: Optional[str] = None
+_SOFFICE_CHECKED = False
+
+
+def _get_soffice() -> Optional[str]:
+    """Locate the LibreOffice binary once per process. Returns path or None."""
+    global _SOFFICE_PATH, _SOFFICE_CHECKED
+    if not _SOFFICE_CHECKED:
+        for name in ("libreoffice", "soffice"):
+            _SOFFICE_PATH = shutil.which(name)
+            if _SOFFICE_PATH:
+                break
+        _SOFFICE_CHECKED = True
+    return _SOFFICE_PATH
+
 
 def find_doc_files(input_path: Path) -> List[Path]:
-    """Find .doc files (not .docx) in input_path, non-recursively."""
-    return [
-        p for p in find_files_by_extensions(input_path, {'.doc'}, recursive=False)
-        if not p.name.lower().endswith('.docx')
-    ]
+    """Find .doc files in input_path, non-recursively."""
+    return list(find_files_by_extensions(input_path, {'.doc'}, recursive=False))
 
 
 def convert_with_libreoffice(input_file: Path, output_dir: Path) -> bool:
     """Convert DOC to DOCX using LibreOffice headless mode. Returns True on success."""
-    try:
-        check = subprocess.run(
-            ['libreoffice', '--version'],
-            capture_output=True, text=True, timeout=10,
-        )
-        if check.returncode != 0:
-            return False
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    soffice = _get_soffice()
+    if soffice is None:
         return False
 
     try:
         result = subprocess.run(
-            ['libreoffice', '--headless', '--convert-to', 'docx',
+            [soffice, '--headless', '--convert-to', 'docx',
              '--outdir', str(output_dir), str(input_file)],
             capture_output=True, text=True, timeout=60,
         )
@@ -83,16 +94,43 @@ def convert_with_word(input_file: Path, output_dir: Path, word_app) -> bool:
         return False
 
 
-def convert_folder(input_folder: Optional[Path] = None) -> None:
+def _open_word():
+    """Start a hidden Word COM instance, or None if unavailable."""
+    if not (_PLATFORM_WINDOWS and _WIN32_AVAILABLE):
+        return None
+    try:
+        import win32com.client as win32
+        app = win32.Dispatch("Word.Application")
+        app.Visible = False
+        return app
+    except Exception as e:
+        _log.warning(f"Could not initialize Microsoft Word: {e}")
+        return None
+
+
+def _quit_word(word_app) -> None:
+    try:
+        word_app.Quit()
+    except Exception:
+        pass
+
+
+def convert_folder(
+    input_folder: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
+    skip_existing: bool = True,
+) -> None:
     """
-    Convert all .doc files in input_folder to .docx, writing to input_folder/output/.
-    Tries Word first on Windows, falls back to LibreOffice.
+    Convert all .doc files in input_folder to .docx, writing to output_dir
+    (default: input_folder/output). Tries Word first on Windows, falls back
+    to LibreOffice. Existing .docx targets are skipped unless skip_existing
+    is False.
     """
     if input_folder is None:
         input_folder = Path.cwd()
 
-    output_path = input_folder / "output"
-    output_path.mkdir(exist_ok=True)
+    output_path = output_dir if output_dir is not None else input_folder / "output"
+    output_path.mkdir(parents=True, exist_ok=True)
     _log.info(f"Output directory: {output_path}")
 
     doc_files = find_doc_files(input_folder)
@@ -103,25 +141,38 @@ def convert_folder(input_folder: Optional[Path] = None) -> None:
     _log.info(f"Found {len(doc_files)} .doc file(s) to convert.")
 
     converted_count = 0
-    word_app = None
+    skipped_count = 0
+    word_failures = 0
     progress = ProgressReporter(len(doc_files), "Converting files")
 
-    if _PLATFORM_WINDOWS and _WIN32_AVAILABLE:
-        try:
-            import win32com.client as win32
-            word_app = win32.Dispatch("Word.Application")
-            word_app.Visible = False
-            _log.info("Using Microsoft Word for conversion")
-        except Exception as e:
-            _log.warning(f"Could not initialize Microsoft Word: {e}")
-            _log.info("Will try LibreOffice as fallback")
+    word_app = _open_word()
+    if word_app:
+        _log.info("Using Microsoft Word for conversion")
+    elif _PLATFORM_WINDOWS:
+        _log.info("Will try LibreOffice as fallback")
 
     try:
         for doc_file in doc_files:
+            target = output_path / f"{doc_file.stem}.docx"
+            if skip_existing and target.exists():
+                _log.info(f"→ Skipping {doc_file.name}: {target.name} already exists")
+                skipped_count += 1
+                progress.update()
+                continue
+
             success = False
 
             if word_app:
                 success = convert_with_word(doc_file, output_path, word_app)
+                if success:
+                    word_failures = 0
+                else:
+                    word_failures += 1
+                    if word_failures >= _WORD_RESTART_AFTER:
+                        _log.warning("Restarting Word after repeated failures")
+                        _quit_word(word_app)
+                        word_app = _open_word()
+                        word_failures = 0
 
             if not success:
                 success = convert_with_libreoffice(doc_file, output_path)
@@ -135,16 +186,16 @@ def convert_folder(input_folder: Optional[Path] = None) -> None:
 
     finally:
         if word_app:
-            try:
-                word_app.Quit()
-            except Exception:
-                pass
+            _quit_word(word_app)
         progress.finish()
 
-    _log.info(f"\nConversion complete!")
+    _log.info("Conversion complete!")
     _log.info(f"Successfully converted: {converted_count}/{len(doc_files)} files")
+    if skipped_count:
+        _log.info(f"Skipped (already converted): {skipped_count}")
     _log.info(f"Converted files saved in: {output_path}")
 
-    if converted_count < len(doc_files):
-        _log.warning(f"Failed conversions: {len(doc_files) - converted_count}")
+    failed = len(doc_files) - converted_count - skipped_count
+    if failed > 0:
+        _log.warning(f"Failed conversions: {failed}")
         _log.info("Note: Install Microsoft Word or LibreOffice for best results")

@@ -1,4 +1,5 @@
 """Output helpers: console progress reporting and file writing."""
+import json
 import logging
 import sys
 from pathlib import Path
@@ -64,3 +65,27 @@ def save_results_to_file(
     except OSError as e:
         _log.error(f"Error saving results to {output_file}: {e}")
         return False
+
+
+def save_results(
+    output_file: Path,
+    txt_lines: List,
+    json_payload,
+    title: str,
+    fmt: str = "txt",
+) -> bool:
+    """
+    Single serializer for all CLIs.
+    txt: legacy line-based layout (byte-identical to the old per-CLI writers).
+    json: structured dump of json_payload.
+    """
+    if fmt.lower() == "json":
+        try:
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(json_payload, f, indent=2, ensure_ascii=False)
+            _log.info(f"Results saved to: {output_file}")
+            return True
+        except OSError as e:
+            _log.error(f"Error saving results to {output_file}: {e}")
+            return False
+    return save_results_to_file(txt_lines, output_file, title)

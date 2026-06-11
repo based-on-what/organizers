@@ -53,7 +53,7 @@ Six CLI scripts that help you organize different types of files:
 - **pypdf 3.0+** — PDF reading (falls back to PyPDF2 if pypdf is absent)
 - **python-docx 0.8.11+** — DOCX reading and page estimation
 - **ebooklib 0.18+** — EPUB processing
-- **moviepy 1.0.3+** — video duration reading
+- **ffprobe** (part of ffmpeg) — fast video duration reading; **moviepy 1.0.3+** is used as fallback when ffprobe is not on PATH
 - **rarfile 4.0+** — CBR archive reading
 
 ### API Integration
@@ -70,6 +70,7 @@ Six CLI scripts that help you organize different types of files:
 - **pip**
 
 ### Optional
+- **ffmpeg** (provides `ffprobe`) for fast video duration analysis — strongly recommended; without it moviepy is used and is roughly 10x slower
 - Steam Web API key for `steamSorter.py` — get one at [Steam Developer Portal](https://steamcommunity.com/dev/apikey)
 - Microsoft Word or LibreOffice for `doc2docx.py`
 - RAR tools (`unrar`) for CBR comic files
@@ -98,6 +99,25 @@ brew install unrar libreoffice
 Install Microsoft Word or LibreOffice. `pywin32` is included in `requirements.txt` and installed automatically on Windows.
 
 ## Usage
+
+All tools share the same base flags: an optional positional `directory`
+(default: current directory), `-o/--output`, `-f/--format txt|json`, and
+`-l/--log-level`. Results are printed to stdout (pipeable); diagnostics and
+progress go to stderr.
+
+Installing the package (`pip install -e .`) provides a single `organizers`
+command with one subcommand per tool:
+
+```bash
+organizers videos /path/to/movies -o report.txt
+organizers series          # seriesLength.py
+organizers pages           # pageCounter.py
+organizers comics          # comanga.py
+organizers steam           # steamSorter.py
+organizers doc2docx        # doc2docx.py
+```
+
+The standalone `python <script>.py` invocations below keep working unchanged.
 
 ### length.py
 
@@ -136,10 +156,10 @@ Log file: `video_analyzer.log`.
 
 ### pageCounter.py
 
-Counts pages in documents in the current directory (non-recursive).
+Counts pages in documents in a directory (non-recursive).
 
 ```bash
-python pageCounter.py
+python pageCounter.py [directory] [-o output.txt] [-f json]
 ```
 
 **Supported formats:** PDF, EPUB, DOCX.
@@ -170,14 +190,16 @@ python steamSorter.py
 
 `STEAM_IDS` accepts one or more comma-separated Steam 64-bit user IDs. Duplicate games across libraries are deduplicated. HLTB requests are rate-limited to one per second.
 
+HLTB results are cached on disk for 90 days (`%LOCALAPPDATA%\organizers\hltb_cache.json` on Windows, `~/.cache/organizers/hltb_cache.json` elsewhere), so reruns complete in seconds and an interrupted run resumes where it left off.
+
 Output file: `steam_games_completion_times.txt`.
 
 ### seriesLength.py
 
-Calculates total video duration for each subdirectory of the current directory, treating each subdirectory as a separate TV series.
+Calculates total video duration for each subdirectory, treating each subdirectory as a separate TV series.
 
 ```bash
-python seriesLength.py
+python seriesLength.py [directory] [-o output.txt] [-f json]
 ```
 
 Output file: `series_durations.txt`.
@@ -202,13 +224,13 @@ Output file: `comanga_page_counts.txt`.
 
 ### doc2docx.py
 
-Converts all `.doc` files in the current directory to `.docx`.
+Converts all `.doc` files in a directory to `.docx`.
 
 ```bash
-python doc2docx.py
+python doc2docx.py [directory] [-o output_dir] [--no-skip-existing]
 ```
 
-Converted files are written to `./output/`. Original `.doc` files are not modified.
+Converted files are written to `<directory>/output/` (or the directory given with `-o`). Original `.doc` files are not modified. Files whose `.docx` already exists in the output directory are skipped; pass `--no-skip-existing` to re-convert them.
 
 **Conversion backends (tried in order):**
 1. Microsoft Word via COM (Windows, requires pywin32 + Word installed)
@@ -218,8 +240,10 @@ Converted files are written to `./output/`. Original `.doc` files are not modifi
 
 ```
 organizers/
+├── pyproject.toml           # packaging, ruff and pytest config; `organizers` entry point
 ├── requirements.txt
-├── shared_utils.py          # backward-compat re-export shim
+├── shared_utils.py          # DEPRECATED re-export shim — emits DeprecationWarning, removed next minor version
+├── organizers_cli.py        # `organizers` command: one subcommand per tool
 ├── length.py                # CLI: video duration analyzer
 ├── seriesLength.py          # CLI: TV series duration analyzer
 ├── pageCounter.py           # CLI: document page counter
@@ -227,21 +251,25 @@ organizers/
 ├── doc2docx.py              # CLI: DOC to DOCX converter
 ├── steamSorter.py           # CLI: Steam game completion analyzer
 ├── core/
+│   ├── cli.py               # shared argparse contract (directory, -o, -f, -l)
 │   ├── formatters.py        # pure formatting helpers (duration, file size)
-│   ├── fs.py                # file discovery and access checks
+│   ├── fs.py                # streaming file discovery and access checks
 │   ├── loaders.py           # lazy-import registry for optional dependencies
-│   ├── log.py               # logging setup
-│   └── output.py            # ProgressReporter and file-writing helpers
+│   ├── log.py               # logging setup (diagnostics to stderr)
+│   └── output.py            # ProgressReporter and txt/json result serializer
 ├── readers/
 │   ├── pages.py             # pure page-count readers (PDF, EPUB, CBZ, CBR, DOCX)
-│   └── video.py             # pure video duration reader
+│   └── video.py             # pure video duration reader (ffprobe, moviepy fallback)
 ├── analyzers/
 │   ├── comics.py            # comic/manga directory scanner with thread pool
 │   ├── documents.py         # document directory scanner
-│   ├── steam.py             # SteamClient, HltbClient, analyze_libraries()
-│   └── video.py             # analyze_flat() and analyze_series()
-└── converters/
-    └── doc2docx.py          # DOC-to-DOCX conversion backends and orchestration
+│   ├── steam.py             # SteamClient, HltbClient, HltbCache, analyze_libraries()
+│   └── video.py             # analyze_flat() and analyze_series(), thread pool
+├── converters/
+│   └── doc2docx.py          # DOC-to-DOCX conversion backends and orchestration
+├── tests/                   # pytest suite (no network, no codecs required)
+├── organizers_c/            # FROZEN Windows-native C ports (MSVC) — reference only
+└── organizers_posix/        # FROZEN Linux/macOS C ports (gcc/clang) — reference only
 ```
 
 ### Layer responsibilities
@@ -253,7 +281,11 @@ organizers/
 | `readers/` | Reading a single file and returning raw data |
 | `core/` | Formatting, filesystem utilities, lazy loaders, logging, output helpers |
 
-`shared_utils.py` is a backward-compatibility shim that re-exports symbols from `core/` and `readers/`. New code should import directly from those packages.
+`shared_utils.py` is a deprecated backward-compatibility shim that re-exports symbols from `core/` and `readers/`. It emits a `DeprecationWarning` on import and will be removed in the next minor version — import directly from those packages.
+
+### C ports (frozen)
+
+`organizers_c/` (Windows, built with Visual Studio Build Tools / MSVC `cl`) and `organizers_posix/` (Linux/macOS, gcc/clang) contain C rewrites of all six tools. **Both trees are frozen and unmaintained**: they are kept as reference implementations, receive no feature updates, and may drift from the Python behavior. CI compiles both trees on every push so they cannot silently rot. See each folder's README for build instructions; compiled binaries are not committed.
 
 ## Configuration
 
@@ -266,7 +298,7 @@ organizers/
 
 ### Logging
 
-All scripts use the `organizers` logger. Log level defaults to `INFO`. `length.py` additionally writes to `video_analyzer.log`. Pass `-l DEBUG` to `length.py` for verbose output; other scripts are INFO-only.
+All scripts use the `organizers` logger and accept `-l/--log-level` (`DEBUG INFO WARNING ERROR`, default `INFO`). Diagnostics go to stderr; results are printed to stdout so output stays pipeable at any log level. `length.py` additionally writes to `video_analyzer.log`.
 
 ## Troubleshooting
 
@@ -317,7 +349,7 @@ Please report issues in the Issues section.
 
 ## License
 
-No license file is currently included. Add a `LICENSE` file to define usage and distribution terms.
+This project is licensed under the MIT License — see [LICENSE](LICENSE).
 
 ## Credits
 

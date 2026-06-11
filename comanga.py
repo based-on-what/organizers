@@ -1,53 +1,63 @@
 #!/usr/bin/env python3
 """Comic/manga page counter CLI entry point."""
 
-import logging
 from pathlib import Path
+from typing import List, Optional
 
 from analyzers.comics import analyze_directory
+from core.cli import build_parser, resolve_directory
 from core.log import setup_logging
-from core.output import save_results_to_file
-
-_log = logging.getLogger("organizers")
+from core.output import save_results
 
 
-def display_results(results: dict) -> None:
+def display_results(results: dict, output_file: str, fmt: str = "txt") -> None:
     if not results:
-        _log.info("No supported files found.")
+        print("No supported files found.")
         return
 
     sorted_results = sorted(results.items(), key=lambda x: x[1])
 
-    _log.info("\n" + "=" * 50)
-    _log.info("FINAL RESULTS (sorted by page count)")
-    _log.info("=" * 50)
+    print("\n" + "=" * 50)
+    print("FINAL RESULTS (sorted by page count)")
+    print("=" * 50)
 
     lines = []
     total_pages = 0
     for name, pages in sorted_results:
         msg = f"{name}: {pages} pages"
-        _log.info(msg)
+        print(msg)
         lines.append(msg)
         total_pages += pages
 
-    _log.info("-" * 50)
-    _log.info(f"Total items: {len(results)}")
-    _log.info(f"Total pages: {total_pages}")
+    print("-" * 50)
+    print(f"Total items: {len(results)}")
+    print(f"Total pages: {total_pages}")
 
     lines.extend(["", f"Total items: {len(results)}", f"Total pages: {total_pages}"])
-    save_results_to_file(lines, Path("comanga_page_counts.txt"), "COMIC/MANGA PAGE COUNT RESULTS")
+    json_payload = {
+        "items": [{"name": n, "pages": p} for n, p in sorted_results],
+        "total_items": len(results),
+        "total_pages": total_pages,
+    }
+    save_results(
+        Path(output_file), lines, json_payload,
+        "COMIC/MANGA PAGE COUNT RESULTS", fmt,
+    )
 
 
-def main(directory: Path = None) -> None:
-    logger = setup_logging("INFO")
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = build_parser(
+        "Count pages in comic/manga files (PDF, EPUB, CBZ, CBR)",
+        default_output="comanga_page_counts.txt",
+    )
+    args = parser.parse_args(argv)
+    logger = setup_logging(args.log_level)
 
-    if directory is None:
-        directory = Path.cwd()
-
+    directory = resolve_directory(args.directory, logger)
     logger.info(f"Starting comic/manga analysis in: {directory}")
 
     results = analyze_directory(directory)
-    display_results(results)
+    display_results(results, args.output, args.format)
 
 
 if __name__ == "__main__":

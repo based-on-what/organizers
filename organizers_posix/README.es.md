@@ -1,5 +1,12 @@
 # organizers_posix — Traducciones C Nativas para Linux y macOS
 
+> **Estado: CONGELADO / sin mantenimiento.** Estos ports se conservan como
+> referencia y recurso de aprendizaje. Las nuevas funcionalidades y
+> correcciones se hacen solo en las herramientas Python; este codigo no
+> recibe actualizaciones funcionales. La CI compila este arbol en cada push
+> (gcc en Ubuntu, ver `.github/workflows/ci.yml`) para que no se degrade en
+> silencio, pero el comportamiento puede divergir de las versiones Python.
+
 Esta carpeta contiene reescrituras en C (C11) compatibles con POSIX de todos
 los scripts Python del repositorio `organizers/`.
 

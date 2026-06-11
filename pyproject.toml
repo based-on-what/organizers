@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "organizers"
+version = "1.0.0"
+description = "CLI tools to organize and analyze media libraries: video durations, document page counts, comic pages, Steam completion times, DOC conversion"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = [
+    "pypdf>=3.0.0",
+    "ebooklib>=0.18",
+    "rarfile>=4.0",
+    "moviepy>=1.0.3",
+    "python-docx>=0.8.11",
+    "requests>=2.28.0",
+    "howlongtobeatpy>=1.0.0",
+    "pywin32>=305; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+organizers = "organizers_cli:main"
+
+[tool.setuptools]
+packages = ["core", "readers", "analyzers", "converters"]
+py-modules = [
+    "comanga",
+    "doc2docx",
+    "length",
+    "organizers_cli",
+    "pageCounter",
+    "seriesLength",
+    "shared_utils",
+    "steamSorter",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+exclude = ["organizers_c", "organizers_posix", "temphltb_check"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = [
+    "UP015",  # open() mode "r" — explicit is fine
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,6 +1,7 @@
 pypdf>=3.0.0
 ebooklib>=0.18
 rarfile>=4.0
+# Video duration uses ffprobe (part of ffmpeg) when on PATH; moviepy is the fallback
 moviepy>=1.0.3
 python-docx>=0.8.11
 requests>=2.28.0

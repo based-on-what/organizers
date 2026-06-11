@@ -6,10 +6,11 @@ All dispatch goes through count_pages() — single entry point replaces the
 duplicated dict-based dispatchers that existed in comanga.py and pageCounter.py.
 """
 import os.path
+import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
-from core.loaders import get_pdf_reader, get_epub_modules, get_rar_file, get_docx_document
+from core.loaders import get_docx_document, get_epub_modules, get_pdf_reader, get_rar_file
 
 # Without leading dot — matched against os.path.splitext()[1][1:] to avoid
 # allocating a Path object for every entry in large archives.
@@ -25,7 +26,33 @@ def count_pdf_pages(file_path: Path) -> int:
         raise RuntimeError(f"Error reading PDF: {file_path}") from e
 
 
+_CONTAINER_NS = {'c': 'urn:oasis:names:tc:opendocument:xmlns:container'}
+_OPF_NS = {'opf': 'http://www.idpf.org/2007/opf'}
+
+
+def _count_epub_manifest(file_path: Path) -> int:
+    """
+    Count xhtml documents from the OPF manifest without parsing the book.
+    An EPUB is a zip; the OPF location is recorded in META-INF/container.xml.
+    """
+    with zipfile.ZipFile(file_path, 'r') as zf:
+        container = ET.fromstring(zf.read('META-INF/container.xml'))
+        rootfile = container.find('.//c:rootfile', _CONTAINER_NS)
+        opf = ET.fromstring(zf.read(rootfile.get('full-path')))
+        return sum(
+            1 for item in opf.findall('.//opf:manifest/opf:item', _OPF_NS)
+            if item.get('media-type') == 'application/xhtml+xml'
+        )
+
+
 def count_epub_pages(file_path: Path) -> int:
+    try:
+        count = _count_epub_manifest(file_path)
+        if count > 0:
+            return count
+    except Exception:
+        pass  # malformed container/manifest — let ebooklib try the hard way
+
     try:
         ebooklib, epub = get_epub_modules()
         book = epub.read_epub(str(file_path))

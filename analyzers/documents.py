@@ -22,7 +22,7 @@ def analyze_directory(directory: Path) -> List[Tuple[str, int]]:
     Return [(filename, page_count)] for each supported file in directory.
     Non-recursive: documents are expected flat, not in subdirs.
     """
-    files = find_files_by_extensions(directory, _EXTENSIONS, recursive=False)
+    files = list(find_files_by_extensions(directory, _EXTENSIONS, recursive=False))
     if not files:
         _log.info("No supported files found in the directory.")
         return []

@@ -14,7 +14,8 @@ def setup_logging(
     logger.setLevel(getattr(logging, log_level.upper()))
 
     if not logger.handlers:
-        console_handler = logging.StreamHandler(sys.stdout)
+        # Diagnostics go to stderr; stdout is reserved for results (pipeable)
+        console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
 
